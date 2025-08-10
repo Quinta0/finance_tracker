@@ -107,7 +107,7 @@ FINANCE_TRACKER/
 ## 🐛 Known Issues (TODO)
 
 ### Critical Bugs
-- [ ] **Cursor jumping in input fields** - Form inputs lose focus/cursor position while typing
+- [X] **Cursor jumping in input fields** - Form inputs lose focus/cursor position while typing
 - [ ] **Transaction form validation** - Better client-side validation needed
 - [ ] **Error handling** - Improve user feedback for API failures
 - [ ] **Loading states** - Add loading indicators for all API calls
