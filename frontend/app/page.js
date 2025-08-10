@@ -1,7 +1,7 @@
 "use client"
-import React, { useState, useEffect } from 'react';
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, PieChart, Pie, Cell, BarChart, Bar, ResponsiveContainer, Area } from 'recharts';
-import { DollarSign, TrendingUp, Target, Plus, Edit2, Trash2, Calendar, Calculator, Activity } from 'lucide-react';
+import React, { useState, useEffect, useRef } from 'react';
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, PieChart, Pie, Cell, BarChart, Bar, ResponsiveContainer } from 'recharts';
+import { DollarSign, TrendingUp, Target, Plus, Trash2, Calculator, Activity, TrendingDown, PiggyBank, Filter } from 'lucide-react';
 
 const PersonalFinanceTracker = () => {
   // API Base URL
@@ -18,27 +18,109 @@ const PersonalFinanceTracker = () => {
     transaction_count: 0
   });
   const [sixMonthTrend, setSixMonthTrend] = useState([]);
+  const [yearlyData, setYearlyData] = useState([]);
   const [budgetData, setBudgetData] = useState({
     monthly_income: 5000,
     needs_budget: 2500,
     wants_budget: 1500,
     savings_goal: 1000
   });
-  // State for budget input (separate from API data)
   const [budgetAnalysis, setBudgetAnalysis] = useState(null);
   const [budgetInput, setBudgetInput] = useState('5000');
   const [loading, setLoading] = useState(false);
-  const [newTransaction, setNewTransaction] = useState({
-    type: 'expense',
-    category: 'food',
-    amount: '',
-    description: '',
-    date: new Date().toISOString().split('T')[0]
-  });
+  const [quarterFilter, setQuarterFilter] = useState('all');
+  
+  // Form refs to prevent re-renders
+  const typeRef = useRef('expense');
+  const categoryRef = useRef('food');
+  const amountRef = useRef('');
+  const descriptionRef = useRef('');
+  const dateRef = useRef(new Date().toISOString().split('T')[0]);
 
   // Categories
-  const expenseCategories = ['food', 'transportation', 'entertainment', 'shopping', 'bills', 'healthcare', 'other'];
+  const expenseCategories = ['food', 'transportation', 'entertainment', 'shopping', 'bills', 'healthcare', 'rent', 'utilities', 'other'];
   const incomeCategories = ['salary', 'freelance', 'investment', 'bonus', 'other'];
+
+  // Generate 12 months of data
+  const generateYearlyData = (transactions) => {
+    const months = ['January', 'February', 'March', 'April', 'May', 'June', 
+                   'July', 'August', 'September', 'October', 'November', 'December'];
+    
+    const currentDate = new Date();
+    const currentYear = currentDate.getFullYear();
+    
+    return months.map((month, index) => {
+      const monthTransactions = transactions.filter(t => {
+        const tDate = new Date(t.date);
+        return tDate.getMonth() === index && tDate.getFullYear() === currentYear;
+      });
+      
+      const income = monthTransactions
+        .filter(t => t.type === 'income')
+        .reduce((sum, t) => sum + parseFloat(t.amount), 0);
+      
+      const expenses = monthTransactions
+        .filter(t => t.type === 'expense')
+        .reduce((sum, t) => sum + parseFloat(t.amount), 0);
+      
+      return {
+        month,
+        monthIndex: index,
+        income,
+        expenses,
+        net: income - expenses
+      };
+    });
+  };
+
+  // Get filtered months based on quarter
+  const getFilteredMonths = () => {
+    if (!yearlyData.length) return [];
+    
+    switch(quarterFilter) {
+      case 'Q1': return yearlyData.filter(m => m.monthIndex >= 0 && m.monthIndex <= 2);
+      case 'Q2': return yearlyData.filter(m => m.monthIndex >= 3 && m.monthIndex <= 5);
+      case 'Q3': return yearlyData.filter(m => m.monthIndex >= 6 && m.monthIndex <= 8);
+      case 'Q4': return yearlyData.filter(m => m.monthIndex >= 9 && m.monthIndex <= 11);
+      default: return yearlyData;
+    }
+  };
+
+  // Calculate actual income breakdown from transactions
+  const getActualIncomeBreakdown = () => {
+    const incomeTransactions = transactions.filter(t => t.type === 'income');
+    const breakdown = {};
+    
+    incomeTransactions.forEach(t => {
+      if (!breakdown[t.category]) {
+        breakdown[t.category] = 0;
+      }
+      breakdown[t.category] += parseFloat(t.amount);
+    });
+    
+    return Object.entries(breakdown).map(([category, amount]) => ({
+      name: category.charAt(0).toUpperCase() + category.slice(1),
+      value: amount
+    }));
+  };
+
+  // Calculate actual expense breakdown with all categories
+  const getActualExpenseBreakdown = () => {
+    const expenseTransactions = transactions.filter(t => t.type === 'expense');
+    const breakdown = {};
+    
+    expenseTransactions.forEach(t => {
+      if (!breakdown[t.category]) {
+        breakdown[t.category] = 0;
+      }
+      breakdown[t.category] += parseFloat(t.amount);
+    });
+    
+    return Object.entries(breakdown).map(([category, amount]) => ({
+      name: category.charAt(0).toUpperCase() + category.slice(1),
+      value: amount
+    }));
+  };
 
   // API Functions
   const fetchDashboardData = async () => {
@@ -55,7 +137,12 @@ const PersonalFinanceTracker = () => {
     try {
       const response = await fetch(`${API_BASE}/transactions/six_month_trend/`);
       const data = await response.json();
-      setSixMonthTrend(data);
+      // Fix the savings calculation
+      const fixedData = data.map(month => ({
+        ...month,
+        savings: month.income - month.expenses // Correct calculation
+      }));
+      setSixMonthTrend(fixedData);
     } catch (error) {
       console.error('Error fetching trend data:', error);
     }
@@ -65,7 +152,9 @@ const PersonalFinanceTracker = () => {
     try {
       const response = await fetch(`${API_BASE}/transactions/`);
       const data = await response.json();
-      setTransactions(data.results || data);
+      const transactionData = data.results || data;
+      setTransactions(transactionData);
+      setYearlyData(generateYearlyData(transactionData));
     } catch (error) {
       console.error('Error fetching transactions:', error);
     }
@@ -107,9 +196,12 @@ const PersonalFinanceTracker = () => {
     }
   }, [budgetData.monthly_income]);
 
-  // Add new transaction with better error handling
+  // Add new transaction
   const addTransaction = async () => {
-    if (!newTransaction.amount || !newTransaction.description || parseFloat(newTransaction.amount) <= 0) {
+    const amount = amountRef.current;
+    const description = descriptionRef.current;
+    
+    if (!amount || !description || parseFloat(amount) <= 0) {
       alert('Please fill in all fields with valid values');
       return;
     }
@@ -122,23 +214,21 @@ const PersonalFinanceTracker = () => {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          type: newTransaction.type,
-          category: newTransaction.category,
-          amount: parseFloat(newTransaction.amount),
-          description: newTransaction.description.trim(),
-          date: newTransaction.date
+          type: typeRef.current,
+          category: categoryRef.current,
+          amount: parseFloat(amount),
+          description: description.trim(),
+          date: dateRef.current
         }),
       });
 
       if (response.ok) {
-        // Reset form
-        setNewTransaction({
-          type: 'expense',
-          category: 'food',
-          amount: '',
-          description: '',
-          date: new Date().toISOString().split('T')[0]
-        });
+        // Clear form using refs
+        amountRef.current = '';
+        descriptionRef.current = '';
+        // Update the actual input elements
+        document.getElementById('amount-input').value = '';
+        document.getElementById('description-input').value = '';
 
         // Refresh data
         await Promise.all([
@@ -150,9 +240,7 @@ const PersonalFinanceTracker = () => {
         
         alert('Transaction added successfully!');
       } else {
-        const errorData = await response.json();
-        console.error('Server error:', errorData);
-        alert(`Error adding transaction: ${response.status} ${response.statusText}`);
+        alert(`Error adding transaction: ${response.status}`);
       }
     } catch (error) {
       console.error('Error adding transaction:', error);
@@ -171,7 +259,6 @@ const PersonalFinanceTracker = () => {
       });
 
       if (response.ok) {
-        // Refresh data
         await Promise.all([
           fetchDashboardData(),
           fetchSixMonthTrend(),
@@ -184,7 +271,7 @@ const PersonalFinanceTracker = () => {
     }
   };
 
-  // Update budget - only call when form is submitted
+  // Update budget
   const handleBudgetSubmit = async () => {
     const income = parseFloat(budgetInput);
     if (!income || income <= 0) {
@@ -208,212 +295,277 @@ const PersonalFinanceTracker = () => {
         setBudgetData(data);
         fetchBudgetAnalysis();
         alert('Budget updated successfully!');
-      } else {
-        alert(`Error updating budget: ${response.status} ${response.statusText}`);
       }
     } catch (error) {
       console.error('Error updating budget:', error);
-      alert('Could not connect to server. Make sure Django backend is running on http://localhost:8000');
     }
   };
 
   // Dashboard Component
   const Dashboard = () => {
-    // Prepare expense breakdown for chart
-    const expenseBreakdownArray = Object.entries(dashboardData.expense_breakdown).map(([key, value]) => ({
-      name: key.charAt(0).toUpperCase() + key.slice(1),
-      value: value
-    }));
+    const incomeBreakdown = getActualIncomeBreakdown();
+    const expenseBreakdown = getActualExpenseBreakdown();
+    const filteredMonths = getFilteredMonths();
+    
+    // Colors for charts
+    const expenseColors = ['#ef4444', '#f97316', '#eab308', '#84cc16', '#10b981', '#06b6d4', '#3b82f6', '#8b5cf6', '#ec4899'];
+    const incomeColors = ['#10b981', '#06b6d4'];
 
-    // Prepare income breakdown (dummy data for now since API doesn't provide income breakdown)
-    const incomeBreakdownArray = [
-      { name: 'Salary', value: dashboardData.monthly_income * 0.8 },
-      { name: 'Freelance', value: dashboardData.monthly_income * 0.2 }
-    ].filter(item => item.value > 0);
+    // Month indicator colors based on net value
+    const getMonthColor = (net) => {
+      if (net > 1000) return '#10b981'; // Green
+      if (net > 0) return '#eab308'; // Yellow
+      return '#ef4444'; // Red
+    };
 
     return (
-      <div className="space-y-8 bg-gray-50 min-h-screen p-6">
+      <div style={{ backgroundColor: '#1a1a1a', minHeight: '100vh', padding: '24px' }}>
         {/* Top Section with 3 Charts */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(400px, 1fr))', gap: '24px', marginBottom: '24px' }}>
           {/* 2025 Savings Chart */}
-          <div className="bg-white p-6 rounded-lg shadow-sm">
-            <div className="flex items-center mb-4">
-              <TrendingUp className="w-5 h-5 text-gray-600 mr-2" />
-              <h3 className="text-gray-700 font-medium">2025 Savings</h3>
+          <div style={{ backgroundColor: '#2a2a2a', borderRadius: '12px', padding: '24px', border: '1px solid #3a3a3a' }}>
+            <div style={{ display: 'flex', alignItems: 'center', marginBottom: '16px' }}>
+              <TrendingUp style={{ width: '20px', height: '20px', color: '#9ca3af', marginRight: '8px' }} />
+              <h3 style={{ color: '#e5e7eb', fontSize: '16px', fontWeight: '500' }}>2025 Savings</h3>
             </div>
-            <ResponsiveContainer width="100%" height={200}>
+            <ResponsiveContainer width="100%" height={250}>
               <LineChart data={sixMonthTrend}>
-                <defs>
-                  <linearGradient id="savingsGradient" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#3B82F6" stopOpacity={0.3}/>
-                    <stop offset="95%" stopColor="#3B82F6" stopOpacity={0}/>
-                  </linearGradient>
-                </defs>
+                <CartesianGrid strokeDasharray="3 3" stroke="#3a3a3a" />
                 <XAxis 
                   dataKey="month" 
-                  axisLine={false}
-                  tickLine={false}
-                  tick={{ fontSize: 12, fill: '#6B7280' }}
+                  stroke="#6b7280"
+                  style={{ fontSize: '12px' }}
                 />
                 <YAxis 
-                  axisLine={false}
-                  tickLine={false}
-                  tick={{ fontSize: 12, fill: '#6B7280' }}
+                  stroke="#6b7280"
+                  style={{ fontSize: '12px' }}
                   tickFormatter={(value) => `$${(value/1000).toFixed(0)}K`}
+                />
+                <Tooltip 
+                  contentStyle={{ backgroundColor: '#2a2a2a', border: '1px solid #3a3a3a' }}
+                  labelStyle={{ color: '#e5e7eb' }}
                 />
                 <Line 
                   type="monotone" 
                   dataKey="savings" 
-                  stroke="#3B82F6" 
+                  stroke="#3b82f6"
                   strokeWidth={2}
-                  dot={{ fill: '#3B82F6', strokeWidth: 0, r: 4 }}
-                  activeDot={{ r: 6, fill: '#3B82F6' }}
-                />
-                <Area 
-                  type="monotone" 
-                  dataKey="savings" 
-                  stroke="#3B82F6" 
-                  fillOpacity={1} 
-                  fill="url(#savingsGradient)" 
+                  dot={{ fill: '#3b82f6', r: 4 }}
                 />
               </LineChart>
             </ResponsiveContainer>
           </div>
 
           {/* Income Breakdown */}
-          <div className="bg-white p-6 rounded-lg shadow-sm">
-            <div className="flex items-center mb-4">
-              <div className="w-5 h-5 rounded-full bg-gray-400 mr-2"></div>
-              <h3 className="text-gray-700 font-medium">Income Breakdown</h3>
+          <div style={{ backgroundColor: '#2a2a2a', borderRadius: '12px', padding: '24px', border: '1px solid #3a3a3a' }}>
+            <div style={{ display: 'flex', alignItems: 'center', marginBottom: '16px' }}>
+              <PiggyBank style={{ width: '20px', height: '20px', color: '#9ca3af', marginRight: '8px' }} />
+              <h3 style={{ color: '#e5e7eb', fontSize: '16px', fontWeight: '500' }}>Income Breakdown</h3>
             </div>
-            <div className="flex items-center justify-center h-48">
-              <div className="relative">
-                <ResponsiveContainer width={160} height={160}>
-                  <PieChart>
-                    <Pie
-                      data={incomeBreakdownArray}
-                      cx={80}
-                      cy={80}
-                      innerRadius={50}
-                      outerRadius={70}
-                      paddingAngle={2}
-                      dataKey="value"
-                    >
-                      {incomeBreakdownArray.map((entry, index) => (
-                        <Cell key={`cell-${index}`} fill={['#10B981', '#6B7280'][index % 2]} />
-                      ))}
-                    </Pie>
-                  </PieChart>
-                </ResponsiveContainer>
-                <div className="absolute inset-0 flex items-center justify-center flex-col">
-                  <div className="text-2xl font-bold text-gray-900">${(dashboardData.monthly_income/1000).toFixed(1)}K</div>
-                  <div className="text-xs text-gray-500">Total Amount</div>
+            {incomeBreakdown.length > 0 ? (
+              <>
+                <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '200px' }}>
+                  <div style={{ position: 'relative' }}>
+                    <ResponsiveContainer width={180} height={180}>
+                      <PieChart>
+                        <Pie
+                          data={incomeBreakdown}
+                          cx={90}
+                          cy={90}
+                          innerRadius={60}
+                          outerRadius={80}
+                          paddingAngle={2}
+                          dataKey="value"
+                        >
+                          {incomeBreakdown.map((entry, index) => (
+                            <Cell key={`cell-${index}`} fill={incomeColors[index % incomeColors.length]} />
+                          ))}
+                        </Pie>
+                      </PieChart>
+                    </ResponsiveContainer>
+                    <div style={{ 
+                      position: 'absolute', 
+                      top: '50%', 
+                      left: '50%', 
+                      transform: 'translate(-50%, -50%)',
+                      textAlign: 'center'
+                    }}>
+                      <div style={{ fontSize: '24px', fontWeight: 'bold', color: '#ffffff' }}>
+                        ${(dashboardData.monthly_income/1000).toFixed(1)}K
+                      </div>
+                      <div style={{ fontSize: '12px', color: '#9ca3af' }}>Total Amount</div>
+                    </div>
+                  </div>
                 </div>
+                <div style={{ display: 'flex', justifyContent: 'center', gap: '16px', marginTop: '16px', flexWrap: 'wrap' }}>
+                  {incomeBreakdown.map((item, index) => (
+                    <div key={item.name} style={{ display: 'flex', alignItems: 'center' }}>
+                      <div style={{ 
+                        width: '12px', 
+                        height: '12px', 
+                        borderRadius: '2px',
+                        backgroundColor: incomeColors[index % incomeColors.length],
+                        marginRight: '6px'
+                      }}></div>
+                      <span style={{ fontSize: '12px', color: '#9ca3af' }}>{item.name}</span>
+                    </div>
+                  ))}
+                </div>
+              </>
+            ) : (
+              <div style={{ 
+                display: 'flex', 
+                justifyContent: 'center', 
+                alignItems: 'center', 
+                height: '250px',
+                color: '#6b7280'
+              }}>
+                No income data available
               </div>
-            </div>
-            <div className="flex justify-center space-x-4 mt-4">
-              <div className="flex items-center">
-                <div className="w-3 h-3 bg-green-500 rounded mr-2"></div>
-                <span className="text-xs text-gray-600">Salary</span>
-              </div>
-              <div className="flex items-center">
-                <div className="w-3 h-3 bg-gray-400 rounded mr-2"></div>
-                <span className="text-xs text-gray-600">Freelance</span>
-              </div>
-            </div>
+            )}
           </div>
 
           {/* Expenses Breakdown */}
-          <div className="bg-white p-6 rounded-lg shadow-sm">
-            <div className="flex items-center mb-4">
-              <div className="w-5 h-5 rounded-full bg-gray-400 mr-2"></div>
-              <h3 className="text-gray-700 font-medium">Expenses Breakdown</h3>
+          <div style={{ backgroundColor: '#2a2a2a', borderRadius: '12px', padding: '24px', border: '1px solid #3a3a3a' }}>
+            <div style={{ display: 'flex', alignItems: 'center', marginBottom: '16px' }}>
+              <TrendingDown style={{ width: '20px', height: '20px', color: '#9ca3af', marginRight: '8px' }} />
+              <h3 style={{ color: '#e5e7eb', fontSize: '16px', fontWeight: '500' }}>Expenses Breakdown</h3>
             </div>
-            <div className="flex items-center justify-center h-48">
-              <div className="relative">
-                <ResponsiveContainer width={160} height={160}>
-                  <PieChart>
-                    <Pie
-                      data={expenseBreakdownArray}
-                      cx={80}
-                      cy={80}
-                      innerRadius={50}
-                      outerRadius={70}
-                      paddingAngle={2}
-                      dataKey="value"
-                    >
-                      {expenseBreakdownArray.map((entry, index) => (
-                        <Cell key={`cell-${index}`} fill={['#EF4444', '#F59E0B', '#8B5CF6', '#06B6D4'][index % 4]} />
-                      ))}
-                    </Pie>
-                  </PieChart>
-                </ResponsiveContainer>
-                <div className="absolute inset-0 flex items-center justify-center flex-col">
-                  <div className="text-2xl font-bold text-gray-900">${(dashboardData.monthly_expenses/1000).toFixed(1)}K</div>
-                  <div className="text-xs text-gray-500">Total Amount</div>
+            {expenseBreakdown.length > 0 ? (
+              <>
+                <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '200px' }}>
+                  <div style={{ position: 'relative' }}>
+                    <ResponsiveContainer width={180} height={180}>
+                      <PieChart>
+                        <Pie
+                          data={expenseBreakdown}
+                          cx={90}
+                          cy={90}
+                          innerRadius={60}
+                          outerRadius={80}
+                          paddingAngle={2}
+                          dataKey="value"
+                        >
+                          {expenseBreakdown.map((entry, index) => (
+                            <Cell key={`cell-${index}`} fill={expenseColors[index % expenseColors.length]} />
+                          ))}
+                        </Pie>
+                      </PieChart>
+                    </ResponsiveContainer>
+                    <div style={{ 
+                      position: 'absolute', 
+                      top: '50%', 
+                      left: '50%', 
+                      transform: 'translate(-50%, -50%)',
+                      textAlign: 'center'
+                    }}>
+                      <div style={{ fontSize: '24px', fontWeight: 'bold', color: '#ffffff' }}>
+                        ${(dashboardData.monthly_expenses/1000).toFixed(1)}K
+                      </div>
+                      <div style={{ fontSize: '12px', color: '#9ca3af' }}>Total Amount</div>
+                    </div>
+                  </div>
                 </div>
+                <div style={{ display: 'flex', justifyContent: 'center', gap: '12px', marginTop: '16px', flexWrap: 'wrap' }}>
+                  {expenseBreakdown.map((item, index) => (
+                    <div key={item.name} style={{ display: 'flex', alignItems: 'center' }}>
+                      <div style={{ 
+                        width: '12px', 
+                        height: '12px', 
+                        borderRadius: '2px',
+                        backgroundColor: expenseColors[index % expenseColors.length],
+                        marginRight: '6px'
+                      }}></div>
+                      <span style={{ fontSize: '12px', color: '#9ca3af' }}>{item.name}</span>
+                    </div>
+                  ))}
+                </div>
+              </>
+            ) : (
+              <div style={{ 
+                display: 'flex', 
+                justifyContent: 'center', 
+                alignItems: 'center', 
+                height: '250px',
+                color: '#6b7280'
+              }}>
+                No expense data available
               </div>
-            </div>
-            <div className="flex justify-center space-x-3 mt-4 flex-wrap">
-              <div className="flex items-center mb-1">
-                <div className="w-3 h-3 bg-red-500 rounded mr-1"></div>
-                <span className="text-xs text-gray-600">Food</span>
-              </div>
-              <div className="flex items-center mb-1">
-                <div className="w-3 h-3 bg-yellow-500 rounded mr-1"></div>
-                <span className="text-xs text-gray-600">Bills</span>
-              </div>
-              <div className="flex items-center mb-1">
-                <div className="w-3 h-3 bg-purple-500 rounded mr-1"></div>
-                <span className="text-xs text-gray-600">Entertainment</span>
-              </div>
-              <div className="flex items-center mb-1">
-                <div className="w-3 h-3 bg-cyan-500 rounded mr-1"></div>
-                <span className="text-xs text-gray-600">Shopping</span>
-              </div>
-            </div>
+            )}
           </div>
         </div>
 
-        {/* Bottom Section - Monthly Overview */}
-        <div className="bg-white rounded-lg shadow-sm">
-          {/* Filter Tabs */}
-          <div className="border-b border-gray-200 px-6 py-4">
-            <div className="flex items-center space-x-6">
-              <div className="flex items-center">
-                <Activity className="w-5 h-5 text-gray-600 mr-2" />
-                <span className="text-gray-700 font-medium">Total Savings</span>
-              </div>
-              <div className="flex space-x-4 ml-auto">
-                <button className="px-3 py-1 bg-gray-900 text-white text-xs rounded">All Months</button>
-                <button className="px-3 py-1 bg-gray-100 text-gray-600 text-xs rounded">Q1</button>
-                <button className="px-3 py-1 bg-gray-100 text-gray-600 text-xs rounded">Q2</button>
-                <button className="px-3 py-1 bg-gray-100 text-gray-600 text-xs rounded">Q3</button>
-                <button className="px-3 py-1 bg-gray-100 text-gray-600 text-xs rounded">Q4</button>
-              </div>
+        {/* Total Savings Section */}
+        <div style={{ backgroundColor: '#2a2a2a', borderRadius: '12px', padding: '24px', border: '1px solid #3a3a3a' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
+            <div style={{ display: 'flex', alignItems: 'center' }}>
+              <Activity style={{ width: '20px', height: '20px', color: '#9ca3af', marginRight: '8px' }} />
+              <h3 style={{ color: '#e5e7eb', fontSize: '16px', fontWeight: '500' }}>Total Savings</h3>
             </div>
-          </div>
-
-          {/* Monthly Cards */}
-          <div className="p-6">
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-4">
-              {sixMonthTrend.map((month, index) => (
-                <div key={index} className="text-center">
-                  <div className="flex items-center mb-3">
-                    <div className="w-4 h-4 rounded-full bg-green-500 mr-2"></div>
-                    <span className="text-sm font-medium text-gray-700">{month.month}</span>
-                  </div>
-                  <div className="space-y-2">
-                    <div className="text-xs text-gray-500">
-                      Income: <span className="font-medium">${month.income.toLocaleString()}</span>
-                    </div>
-                    <div className="text-xs text-gray-500">
-                      Expenses: <span className="font-medium">${month.expenses.toLocaleString()}</span>
-                    </div>
-                  </div>
-                </div>
+            <div style={{ display: 'flex', gap: '8px' }}>
+              <button 
+                onClick={() => setQuarterFilter('all')}
+                style={{ 
+                  padding: '6px 12px', 
+                  borderRadius: '6px',
+                  border: 'none',
+                  fontSize: '14px',
+                  cursor: 'pointer',
+                  backgroundColor: quarterFilter === 'all' ? '#4b5563' : '#374151',
+                  color: '#e5e7eb'
+                }}>
+                All Months
+              </button>
+              {['Q1', 'Q2', 'Q3', 'Q4'].map(q => (
+                <button 
+                  key={q}
+                  onClick={() => setQuarterFilter(q)}
+                  style={{ 
+                    padding: '6px 12px', 
+                    borderRadius: '6px',
+                    border: 'none',
+                    fontSize: '14px',
+                    cursor: 'pointer',
+                    backgroundColor: quarterFilter === q ? '#4b5563' : '#374151',
+                    color: '#e5e7eb'
+                  }}>
+                  {q}
+                </button>
               ))}
             </div>
+          </div>
+          
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: '16px' }}>
+            {filteredMonths.map((month) => (
+              <div key={month.month} style={{ 
+                backgroundColor: '#1a1a1a', 
+                borderRadius: '8px', 
+                padding: '16px',
+                border: '1px solid #3a3a3a'
+              }}>
+                <div style={{ display: 'flex', alignItems: 'center', marginBottom: '12px' }}>
+                  <div style={{ 
+                    width: '12px', 
+                    height: '12px', 
+                    borderRadius: '50%',
+                    backgroundColor: getMonthColor(month.net),
+                    marginRight: '8px'
+                  }}></div>
+                  <span style={{ color: '#e5e7eb', fontSize: '14px', fontWeight: '500' }}>{month.month}</span>
+                </div>
+                <div style={{ fontSize: '12px', color: '#9ca3af', marginBottom: '4px' }}>
+                  Income: <span style={{ color: '#10b981' }}>${month.income.toLocaleString()}</span>
+                </div>
+                <div style={{ fontSize: '12px', color: '#9ca3af', marginBottom: '4px' }}>
+                  Expenses: <span style={{ color: '#ef4444' }}>${month.expenses.toLocaleString()}</span>
+                </div>
+                <div style={{ fontSize: '12px', color: '#9ca3af' }}>
+                  Net: <span style={{ color: month.net >= 0 ? '#10b981' : '#ef4444', fontWeight: 'bold' }}>
+                    ${month.net.toLocaleString()}
+                  </span>
+                </div>
+              </div>
+            ))}
           </div>
         </div>
       </div>
@@ -422,30 +574,41 @@ const PersonalFinanceTracker = () => {
 
   // Transactions Component
   const Transactions = () => (
-    <div className="space-y-6">
+    <div style={{ backgroundColor: '#1a1a1a', minHeight: '100vh', padding: '24px' }}>
       {/* Add Transaction Form */}
-      <div className="bg-white p-6 rounded-lg shadow-md">
-        <h3 className="text-lg font-semibold mb-4">Add New Transaction</h3>
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
+      <div style={{ backgroundColor: '#2a2a2a', borderRadius: '12px', padding: '24px', marginBottom: '24px', border: '1px solid #3a3a3a' }}>
+        <h3 style={{ color: '#e5e7eb', fontSize: '18px', fontWeight: '600', marginBottom: '16px' }}>Add New Transaction</h3>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: '12px' }}>
           <select
-            value={newTransaction.type}
-            onChange={(e) => setNewTransaction({
-              ...newTransaction, 
-              type: e.target.value, 
-              category: e.target.value === 'income' ? 'salary' : 'food'
-            })}
-            className="border rounded-lg p-2"
-          >
+            defaultValue="expense"
+            onChange={(e) => {
+              typeRef.current = e.target.value;
+              categoryRef.current = e.target.value === 'income' ? 'salary' : 'food';
+              document.getElementById('category-select').value = categoryRef.current;
+            }}
+            style={{ 
+              padding: '10px',
+              borderRadius: '6px',
+              backgroundColor: '#1a1a1a',
+              border: '1px solid #3a3a3a',
+              color: '#e5e7eb'
+            }}>
             <option value="expense">Expense</option>
             <option value="income">Income</option>
           </select>
           
           <select
-            value={newTransaction.category}
-            onChange={(e) => setNewTransaction({...newTransaction, category: e.target.value})}
-            className="border rounded-lg p-2"
-          >
-            {(newTransaction.type === 'income' ? incomeCategories : expenseCategories).map(cat => (
+            id="category-select"
+            defaultValue="food"
+            onChange={(e) => categoryRef.current = e.target.value}
+            style={{ 
+              padding: '10px',
+              borderRadius: '6px',
+              backgroundColor: '#1a1a1a',
+              border: '1px solid #3a3a3a',
+              color: '#e5e7eb'
+            }}>
+            {expenseCategories.map(cat => (
               <option key={cat} value={cat}>
                 {cat.charAt(0).toUpperCase() + cat.slice(1)}
               </option>
@@ -453,84 +616,132 @@ const PersonalFinanceTracker = () => {
           </select>
           
           <input
+            id="amount-input"
             type="number"
             placeholder="Amount"
-            value={newTransaction.amount}
-            onChange={(e) => setNewTransaction({...newTransaction, amount: e.target.value})}
-            className="border rounded-lg p-2"
+            onChange={(e) => amountRef.current = e.target.value}
+            style={{ 
+              padding: '10px',
+              borderRadius: '6px',
+              backgroundColor: '#1a1a1a',
+              border: '1px solid #3a3a3a',
+              color: '#e5e7eb'
+            }}
             min="0"
             step="0.01"
           />
           
           <input
             type="date"
-            value={newTransaction.date}
-            onChange={(e) => setNewTransaction({...newTransaction, date: e.target.value})}
-            className="border rounded-lg p-2"
+            defaultValue={new Date().toISOString().split('T')[0]}
+            onChange={(e) => dateRef.current = e.target.value}
+            style={{ 
+              padding: '10px',
+              borderRadius: '6px',
+              backgroundColor: '#1a1a1a',
+              border: '1px solid #3a3a3a',
+              color: '#e5e7eb'
+            }}
           />
           
           <button
             onClick={addTransaction}
             disabled={loading}
-            className="bg-blue-500 text-white px-4 py-2 rounded-lg hover:bg-blue-600 flex items-center justify-center disabled:opacity-50"
-          >
-            {loading ? (
-              <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin mr-1"></div>
-            ) : (
-              <Plus className="w-4 h-4 mr-1" />
+            style={{ 
+              padding: '10px',
+              borderRadius: '6px',
+              backgroundColor: '#3b82f6',
+              color: 'white',
+              border: 'none',
+              cursor: loading ? 'not-allowed' : 'pointer',
+              opacity: loading ? 0.5 : 1,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center'
+            }}>
+            {loading ? 'Adding...' : (
+              <>
+                <Plus style={{ width: '16px', height: '16px', marginRight: '4px' }} />
+                Add
+              </>
             )}
-            {loading ? 'Adding...' : 'Add'}
           </button>
         </div>
         
         <input
+          id="description-input"
           type="text"
           placeholder="Description (e.g., Grocery shopping, Salary payment)"
-          value={newTransaction.description}
-          onChange={(e) => setNewTransaction({...newTransaction, description: e.target.value})}
-          className="border rounded-lg p-2 w-full mt-4"
+          onChange={(e) => descriptionRef.current = e.target.value}
+          style={{ 
+            width: '100%',
+            padding: '10px',
+            marginTop: '12px',
+            borderRadius: '6px',
+            backgroundColor: '#1a1a1a',
+            border: '1px solid #3a3a3a',
+            color: '#e5e7eb'
+          }}
         />
       </div>
 
       {/* Transactions List */}
-      <div className="bg-white p-6 rounded-lg shadow-md">
-        <h3 className="text-lg font-semibold mb-4">Recent Transactions</h3>
-        <div className="overflow-x-auto">
-          <table className="w-full table-auto">
+      <div style={{ backgroundColor: '#2a2a2a', borderRadius: '12px', padding: '24px', border: '1px solid #3a3a3a' }}>
+        <h3 style={{ color: '#e5e7eb', fontSize: '18px', fontWeight: '600', marginBottom: '16px' }}>Recent Transactions</h3>
+        <div style={{ overflowX: 'auto' }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse' }}>
             <thead>
-              <tr className="border-b">
-                <th className="text-left p-2">Date</th>
-                <th className="text-left p-2">Type</th>
-                <th className="text-left p-2">Category</th>
-                <th className="text-left p-2">Description</th>
-                <th className="text-right p-2">Amount</th>
-                <th className="text-center p-2">Actions</th>
+              <tr style={{ borderBottom: '1px solid #3a3a3a' }}>
+                <th style={{ textAlign: 'left', padding: '12px', color: '#9ca3af', fontSize: '14px' }}>Date</th>
+                <th style={{ textAlign: 'left', padding: '12px', color: '#9ca3af', fontSize: '14px' }}>Type</th>
+                <th style={{ textAlign: 'left', padding: '12px', color: '#9ca3af', fontSize: '14px' }}>Category</th>
+                <th style={{ textAlign: 'left', padding: '12px', color: '#9ca3af', fontSize: '14px' }}>Description</th>
+                <th style={{ textAlign: 'right', padding: '12px', color: '#9ca3af', fontSize: '14px' }}>Amount</th>
+                <th style={{ textAlign: 'center', padding: '12px', color: '#9ca3af', fontSize: '14px' }}>Actions</th>
               </tr>
             </thead>
             <tbody>
               {transactions.slice(0, 20).map(transaction => (
-                <tr key={transaction.id} className="border-b hover:bg-gray-50">
-                  <td className="p-2">{new Date(transaction.date).toLocaleDateString()}</td>
-                  <td className="p-2">
-                    <span className={`px-2 py-1 rounded text-xs ${
-                      transaction.type === 'income' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
-                    }`}>
+                <tr key={transaction.id} style={{ borderBottom: '1px solid #3a3a3a' }}>
+                  <td style={{ padding: '12px', color: '#e5e7eb', fontSize: '14px' }}>
+                    {new Date(transaction.date).toLocaleDateString()}
+                  </td>
+                  <td style={{ padding: '12px' }}>
+                    <span style={{ 
+                      padding: '4px 8px',
+                      borderRadius: '4px',
+                      fontSize: '12px',
+                      backgroundColor: transaction.type === 'income' ? '#10b981' : '#ef4444',
+                      color: 'white'
+                    }}>
                       {transaction.type}
                     </span>
                   </td>
-                  <td className="p-2 capitalize">{transaction.category}</td>
-                  <td className="p-2">{transaction.description}</td>
-                  <td className={`p-2 text-right font-semibold ${
-                    transaction.type === 'income' ? 'text-green-600' : 'text-red-600'
-                  }`}>
+                  <td style={{ padding: '12px', color: '#e5e7eb', fontSize: '14px', textTransform: 'capitalize' }}>
+                    {transaction.category}
+                  </td>
+                  <td style={{ padding: '12px', color: '#e5e7eb', fontSize: '14px' }}>
+                    {transaction.description}
+                  </td>
+                  <td style={{ 
+                    padding: '12px', 
+                    textAlign: 'right', 
+                    fontSize: '14px',
+                    fontWeight: '600',
+                    color: transaction.type === 'income' ? '#10b981' : '#ef4444'
+                  }}>
                     ${parseFloat(transaction.amount).toLocaleString()}
                   </td>
-                  <td className="p-2 text-center">
+                  <td style={{ padding: '12px', textAlign: 'center' }}>
                     <button
                       onClick={() => deleteTransaction(transaction.id)}
-                      className="text-red-500 hover:text-red-700"
-                    >
-                      <Trash2 className="w-4 h-4" />
+                      style={{ 
+                        backgroundColor: 'transparent',
+                        border: 'none',
+                        cursor: 'pointer',
+                        color: '#ef4444'
+                      }}>
+                      <Trash2 style={{ width: '16px', height: '16px' }} />
                     </button>
                   </td>
                 </tr>
@@ -538,7 +749,12 @@ const PersonalFinanceTracker = () => {
             </tbody>
           </table>
           {transactions.length === 0 && (
-            <div className="text-center py-8 text-gray-500">
+            <div style={{ 
+              textAlign: 'center', 
+              padding: '48px', 
+              color: '#6b7280',
+              fontSize: '14px'
+            }}>
               No transactions yet. Add your first transaction above!
             </div>
           )}
@@ -547,7 +763,7 @@ const PersonalFinanceTracker = () => {
     </div>
   );
 
-  // Smart Budgeting Component
+  // Smart Budgeting Component  
   const SmartBudgeting = () => {
     const budgetComparison = budgetAnalysis ? [
       {
@@ -571,50 +787,68 @@ const PersonalFinanceTracker = () => {
     ] : [];
 
     return (
-      <div className="space-y-6">
+      <div style={{ backgroundColor: '#1a1a1a', minHeight: '100vh', padding: '24px' }}>
         {/* Budget Setup */}
-        <div className="bg-white p-6 rounded-lg shadow-md">
-          <h3 className="text-lg font-semibold mb-4">🎯 Simple Budget Setup</h3>
-          <p className="text-gray-600 mb-4">
+        <div style={{ backgroundColor: '#2a2a2a', borderRadius: '12px', padding: '24px', marginBottom: '24px', border: '1px solid #3a3a3a' }}>
+          <h3 style={{ color: '#e5e7eb', fontSize: '18px', fontWeight: '600', marginBottom: '16px' }}>
+            🎯 Simple Budget Setup
+          </h3>
+          <p style={{ color: '#9ca3af', marginBottom: '16px', fontSize: '14px' }}>
             Follow the 50/30/20 rule: 50% for needs, 30% for wants, 20% for savings and investments.
           </p>
           
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 2fr', gap: '24px' }}>
             <div>
-              <label className="block text-sm font-medium mb-2">Monthly Income</label>
-              <div className="flex gap-2">
+              <label style={{ display: 'block', color: '#9ca3af', fontSize: '14px', marginBottom: '8px' }}>
+                Monthly Income
+              </label>
+              <div style={{ display: 'flex', gap: '8px' }}>
                 <input
                   type="number"
                   value={budgetInput}
                   onChange={(e) => setBudgetInput(e.target.value)}
-                  className="flex-1 border rounded-lg p-3 text-lg"
-                  placeholder="Enter your monthly income"
+                  style={{ 
+                    flex: 1,
+                    padding: '10px',
+                    borderRadius: '6px',
+                    backgroundColor: '#1a1a1a',
+                    border: '1px solid #3a3a3a',
+                    color: '#e5e7eb',
+                    fontSize: '16px'
+                  }}
+                  placeholder="Enter monthly income"
                 />
                 <button
                   onClick={handleBudgetSubmit}
-                  className="bg-blue-500 text-white px-4 py-2 rounded-lg hover:bg-blue-600"
-                >
+                  style={{ 
+                    padding: '10px 20px',
+                    borderRadius: '6px',
+                    backgroundColor: '#3b82f6',
+                    color: 'white',
+                    border: 'none',
+                    cursor: 'pointer'
+                  }}>
                   Update
                 </button>
               </div>
             </div>
             
-            <div className="space-y-3 md:col-span-2">
-              <div className="flex justify-between items-center">
-                <span className="text-sm font-medium">Needs (50%)</span>
-                <span className="text-lg font-bold text-blue-600">
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <span style={{ color: '#9ca3af', fontSize: '14px' }}>Needs (50%)</span>
+                <span style={{ color: '#3b82f6', fontSize: '18px', fontWeight: '600' }}>
                   ${budgetData.needs_budget?.toLocaleString() || 0}
                 </span>
               </div>
-              <div className="flex justify-between items-center">
-                <span className="text-sm font-medium">Wants (30%)</span>
-                <span className="text-lg font-bold text-green-600">
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <span style={{ color: '#9ca3af', fontSize: '14px' }}>Wants (30%)</span>
+                <span style={{ color: '#10b981', fontSize: '18px', fontWeight: '600' }}>
                   ${budgetData.wants_budget?.toLocaleString() || 0}
                 </span>
               </div>
-              <div className="flex justify-between items-center">
-                <span className="text-sm font-medium">Savings (20%)</span>
-                <span className="text-lg font-bold text-purple-600">
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <span style={{ color: '#9ca3af', fontSize: '14px' }}>Savings (20%)</span>
+                <span style={{ color: '#8b5cf6', fontSize: '18px', fontWeight: '600' }}>
                   ${budgetData.savings_goal?.toLocaleString() || 0}
                 </span>
               </div>
@@ -624,70 +858,96 @@ const PersonalFinanceTracker = () => {
 
         {/* Budget vs Actual */}
         {budgetAnalysis && (
-          <div className="bg-white p-6 rounded-lg shadow-md">
-            <h3 className="text-lg font-semibold mb-4">📊 Budget vs Actual Spending</h3>
+          <div style={{ backgroundColor: '#2a2a2a', borderRadius: '12px', padding: '24px', marginBottom: '24px', border: '1px solid #3a3a3a' }}>
+            <h3 style={{ color: '#e5e7eb', fontSize: '18px', fontWeight: '600', marginBottom: '16px' }}>
+              📊 Budget vs Actual Spending
+            </h3>
             <ResponsiveContainer width="100%" height={300}>
               <BarChart data={budgetComparison}>
-                <CartesianGrid strokeDasharray="3 3" />
-                <XAxis dataKey="category" />
-                <YAxis tickFormatter={(value) => `$${(value/1000).toFixed(0)}K`} />
-                <Tooltip formatter={(value) => [`$${value.toLocaleString()}`, '']} />
-                <Legend />
-                <Bar dataKey="budgeted" fill="#8884d8" name="Budgeted" />
-                <Bar dataKey="spent" fill="#82ca9d" name="Spent" />
+                <CartesianGrid strokeDasharray="3 3" stroke="#3a3a3a" />
+                <XAxis dataKey="category" stroke="#6b7280" />
+                <YAxis tickFormatter={(value) => `${(value/1000).toFixed(0)}K`} stroke="#6b7280" />
+                <Tooltip 
+                  contentStyle={{ backgroundColor: '#2a2a2a', border: '1px solid #3a3a3a' }}
+                  labelStyle={{ color: '#e5e7eb' }}
+                />
+                <Bar dataKey="budgeted" fill="#3b82f6" name="Budgeted" />
+                <Bar dataKey="spent" fill="#10b981" name="Spent" />
               </BarChart>
             </ResponsiveContainer>
           </div>
         )}
 
         {/* Financial Principles */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          <div className="bg-blue-50 p-6 rounded-lg">
-            <h4 className="font-semibold text-blue-800 mb-3">💰 50/30/20 Rule</h4>
-            <p className="text-blue-700 text-sm">
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '16px', marginBottom: '24px' }}>
+          <div style={{ backgroundColor: '#2a2a2a', padding: '20px', borderRadius: '12px', border: '1px solid #3a3a3a' }}>
+            <h4 style={{ color: '#e5e7eb', fontSize: '16px', fontWeight: '600', marginBottom: '12px' }}>
+              💰 50/30/20 Rule
+            </h4>
+            <p style={{ color: '#9ca3af', fontSize: '14px' }}>
               50% for needs (rent, food, utilities), 30% for wants (entertainment, dining out), 
-              20% for savings and debt repayment. Simple and effective!
+              20% for savings and debt repayment.
             </p>
           </div>
           
-          <div className="bg-green-50 p-6 rounded-lg">
-            <h4 className="font-semibold text-green-800 mb-3">📈 The Boring Rule</h4>
-            <p className="text-green-700 text-sm">
+          <div style={{ backgroundColor: '#2a2a2a', padding: '20px', borderRadius: '12px', border: '1px solid #3a3a3a' }}>
+            <h4 style={{ color: '#e5e7eb', fontSize: '16px', fontWeight: '600', marginBottom: '12px' }}>
+              📈 The Boring Rule
+            </h4>
+            <p style={{ color: '#9ca3af', fontSize: '14px' }}>
               Invest in low-cost index funds. Don't try to time the market. 
-              Boring investments often perform better than exciting ones over time.
+              Boring investments often perform better over time.
             </p>
           </div>
           
-          <div className="bg-purple-50 p-6 rounded-lg">
-            <h4 className="font-semibold text-purple-800 mb-3">🧠 Conscious Spending</h4>
-            <p className="text-purple-700 text-sm">
+          <div style={{ backgroundColor: '#2a2a2a', padding: '20px', borderRadius: '12px', border: '1px solid #3a3a3a' }}>
+            <h4 style={{ color: '#e5e7eb', fontSize: '16px', fontWeight: '600', marginBottom: '12px' }}>
+              🧠 Conscious Spending
+            </h4>
+            <p style={{ color: '#9ca3af', fontSize: '14px' }}>
               Spend extravagantly on things you love, cut costs mercilessly on things you don't. 
-              Know where every dollar goes and make intentional choices.
+              Make intentional choices.
             </p>
           </div>
         </div>
 
         {/* Budget Health Check */}
         {budgetAnalysis && (
-          <div className="bg-white p-6 rounded-lg shadow-md">
-            <h3 className="text-lg font-semibold mb-4">🏥 Budget Health Check</h3>
-            <div className="space-y-4">
+          <div style={{ backgroundColor: '#2a2a2a', borderRadius: '12px', padding: '24px', border: '1px solid #3a3a3a' }}>
+            <h3 style={{ color: '#e5e7eb', fontSize: '18px', fontWeight: '600', marginBottom: '16px' }}>
+              🏥 Budget Health Check
+            </h3>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
               {budgetComparison.map((item, index) => {
                 const isOnTrack = item.category === 'Savings (20%)' ? 
                   item.actual >= item.budgeted : 
                   item.spent <= item.budgeted;
                 
                 return (
-                  <div key={index} className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
-                    <span className="font-medium">{item.category}</span>
-                    <div className="text-right">
-                      <div className={`text-lg font-bold ${isOnTrack ? 'text-green-600' : 'text-red-600'}`}>
+                  <div key={index} style={{ 
+                    display: 'flex', 
+                    justifyContent: 'space-between', 
+                    alignItems: 'center',
+                    padding: '16px',
+                    backgroundColor: '#1a1a1a',
+                    borderRadius: '8px',
+                    border: '1px solid #3a3a3a'
+                  }}>
+                    <span style={{ color: '#e5e7eb', fontSize: '14px', fontWeight: '500' }}>
+                      {item.category}
+                    </span>
+                    <div style={{ textAlign: 'right' }}>
+                      <div style={{ 
+                        fontSize: '16px', 
+                        fontWeight: '600',
+                        color: isOnTrack ? '#10b981' : '#ef4444'
+                      }}>
                         {isOnTrack ? '✅ On Track' : '⚠️ Over Budget'}
                       </div>
-                      <div className="text-sm text-gray-600">
+                      <div style={{ fontSize: '12px', color: '#6b7280' }}>
                         {item.category === 'Savings (20%)' ? 
-                          `Saving $${item.actual?.toLocaleString() || 0} / $${item.budgeted.toLocaleString()}` :
-                          `Spent $${item.spent.toLocaleString()} / $${item.budgeted.toLocaleString()}`
+                          `Saving ${item.actual?.toLocaleString() || 0} / ${item.budgeted.toLocaleString()}` :
+                          `Spent ${item.spent.toLocaleString()} / ${item.budgeted.toLocaleString()}`
                         }
                       </div>
                     </div>
@@ -702,16 +962,18 @@ const PersonalFinanceTracker = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gray-100">
+    <div style={{ minHeight: '100vh', backgroundColor: '#0a0a0a' }}>
       {/* Header */}
-      <div className="bg-white shadow-sm">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between items-center py-6">
-            <div className="flex items-center">
-              <Calculator className="w-8 h-8 text-blue-600 mr-3" />
-              <h1 className="text-2xl font-bold text-gray-900">Personal Finance Tracker</h1>
+      <div style={{ backgroundColor: '#1a1a1a', borderBottom: '1px solid #2a2a2a' }}>
+        <div style={{ maxWidth: '1400px', margin: '0 auto', padding: '0 24px' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '20px 0' }}>
+            <div style={{ display: 'flex', alignItems: 'center' }}>
+              <Calculator style={{ width: '28px', height: '28px', color: '#3b82f6', marginRight: '12px' }} />
+              <h1 style={{ fontSize: '24px', fontWeight: '600', color: '#e5e7eb' }}>
+                Personal Finance Tracker
+              </h1>
             </div>
-            <div className="text-sm text-gray-500">
+            <div style={{ fontSize: '14px', color: '#6b7280' }}>
               Connected to Django API • {transactions.length} transactions
             </div>
           </div>
@@ -719,9 +981,9 @@ const PersonalFinanceTracker = () => {
       </div>
 
       {/* Navigation */}
-      <div className="bg-white border-b">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <nav className="flex space-x-8">
+      <div style={{ backgroundColor: '#1a1a1a', borderBottom: '1px solid #2a2a2a' }}>
+        <div style={{ maxWidth: '1400px', margin: '0 auto', padding: '0 24px' }}>
+          <nav style={{ display: 'flex', gap: '32px' }}>
             {[
               { id: 'dashboard', name: 'Dashboard', icon: Activity },
               { id: 'transactions', name: 'Transactions', icon: DollarSign },
@@ -730,13 +992,20 @@ const PersonalFinanceTracker = () => {
               <button
                 key={tab.id}
                 onClick={() => setActiveTab(tab.id)}
-                className={`flex items-center py-4 px-1 border-b-2 font-medium text-sm ${
-                  activeTab === tab.id
-                    ? 'border-blue-500 text-blue-600'
-                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                }`}
-              >
-                <tab.icon className="w-4 h-4 mr-2" />
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  padding: '16px 4px',
+                  background: 'none',
+                  border: 'none',
+                  borderBottom: activeTab === tab.id ? '2px solid #3b82f6' : '2px solid transparent',
+                  color: activeTab === tab.id ? '#3b82f6' : '#6b7280',
+                  fontSize: '14px',
+                  fontWeight: '500',
+                  cursor: 'pointer',
+                  transition: 'all 0.2s'
+                }}>
+                <tab.icon style={{ width: '16px', height: '16px', marginRight: '8px' }} />
                 {tab.name}
               </button>
             ))}
@@ -745,7 +1014,7 @@ const PersonalFinanceTracker = () => {
       </div>
 
       {/* Main Content */}
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      <div style={{ maxWidth: '1400px', margin: '0 auto' }}>
         {activeTab === 'dashboard' && <Dashboard />}
         {activeTab === 'transactions' && <Transactions />}
         {activeTab === 'budget' && <SmartBudgeting />}
