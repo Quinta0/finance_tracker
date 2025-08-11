@@ -1,0 +1,304 @@
+# =============================================================================
+# UNIFIED .GITIGNORE FOR FINANCE TRACKER PROJECT
+# =============================================================================
+# This file covers both Python/Django backend and Node.js/Next.js frontend
+# Includes privacy and security considerations for personal finance data
+
+# =============================================================================
+# PYTHON / DJANGO BACKEND
+# =============================================================================
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# Virtual Environments
+venv/
+env/
+ENV/
+.venv/
+.env/
+pyvenv.cfg
+bin/
+include/
+Scripts/
+
+# Django
+*.log
+local_settings.py
+db.sqlite3
+db.sqlite3-journal
+media/
+staticfiles/
+static/
+
+# Django migrations (privacy - may contain sensitive schema info)
+*/migrations/__pycache__/
+*/migrations/*.pyc
+
+# Django secret key and sensitive settings
+.env
+.env.local
+.env.production
+.env.staging
+settings_local.py
+secrets.json
+
+# =============================================================================
+# NODE.JS / NEXT.JS FRONTEND  
+# =============================================================================
+
+# Dependencies
+node_modules/
+/.pnp
+.pnp.*
+.yarn/*
+!.yarn/patches
+!.yarn/plugins
+!.yarn/releases
+!.yarn/versions
+
+# Production builds
+/.next/
+/out/
+/build
+/dist
+
+# Testing
+/coverage
+*.lcov
+
+# Environment variables (may contain API keys)
+.env*
+!.env.example
+
+# Next.js
+.next/
+next-env.d.ts
+*.tsbuildinfo
+
+# Vercel deployment
+.vercel
+
+# =============================================================================
+# DEVELOPMENT & DEBUGGING
+# =============================================================================
+
+# Logs
+logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+lerna-debug.log*
+
+# Debug files
+.nyc_output
+*.lcov
+.coverage
+.pytest_cache/
+htmlcov/
+
+# =============================================================================
+# PRIVACY & SECURITY
+# =============================================================================
+
+# Personal financial data exports
+*.csv
+*.xlsx
+*.pdf
+exports/
+reports/
+backups/
+
+# API keys and secrets
+.secrets
+*.key
+*.pem
+*.p12
+.env.production.local
+.env.local
+.env.development.local
+.env.test.local
+
+# Personal configuration
+config.local.json
+settings.local.py
+
+# Database files (contain sensitive financial data)
+*.sqlite
+*.sqlite3
+*.db
+*.sql
+
+# User uploads (may contain sensitive documents)
+uploads/
+user-data/
+documents/
+
+# =============================================================================
+# OPERATING SYSTEM
+# =============================================================================
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+._*
+
+# Windows
+Thumbs.db
+Thumbs.db:encryptable
+ehthumbs.db
+ehthumbs_vista.db
+*.stackdump
+[Dd]esktop.ini
+
+# Linux
+*~
+.nfs*
+
+# =============================================================================
+# IDE & EDITORS
+# =============================================================================
+
+# VSCode
+.vscode/
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+!.vscode/extensions.json
+
+# PyCharm
+.idea/
+*.iws
+*.iml
+*.ipr
+
+# Sublime Text
+*.sublime-workspace
+*.sublime-project
+
+# Vim
+*.swp
+*.swo
+*~
+
+# Emacs
+*~
+\#*\#
+/.emacs.desktop
+/.emacs.desktop.lock
+*.elc
+auto-save-list
+tramp
+.\#*
+
+# =============================================================================
+# TEMPORARY & CACHE FILES
+# =============================================================================
+
+# Temporary files
+*.tmp
+*.temp
+*.cache
+.cache/
+.npm/
+.eslintcache
+.parcel-cache
+
+# Backup files
+*.bak
+*.backup
+*.old
+
+# =============================================================================
+# DEPLOYMENT & DOCKER
+# =============================================================================
+
+# Docker
+.dockerignore
+Dockerfile.prod
+docker-compose.override.yml
+
+# Deployment keys
+deploy_key*
+*.pem
+
+# =============================================================================
+# PACKAGE MANAGERS
+# =============================================================================
+
+# npm
+package-lock.json
+
+# Yarn
+yarn.lock
+
+# pip
+pip-log.txt
+pip-delete-this-directory.txt
+
+# =============================================================================
+# JUPYTER NOTEBOOKS (if used for financial analysis)
+# =============================================================================
+
+.ipynb_checkpoints
+*/.ipynb_checkpoints/*
+
+# =============================================================================
+# TESTING & COVERAGE
+# =============================================================================
+
+# Coverage reports
+htmlcov/
+.coverage
+.coverage.*
+coverage.xml
+*.cover
+.hypothesis/
+
+# Jest
+/coverage/
+
+# =============================================================================
+# DOCUMENTATION
+# =============================================================================
+
+# Auto-generated docs
+docs/_build/
+site/
+
+# =============================================================================
+# PROJECT SPECIFIC
+# =============================================================================
+
+# Sample/test data (may contain sensitive info)
+sample_data/
+test_data/
+fixtures/private/
+
+# Personal notes and planning
+TODO.md
+NOTES.md
+personal/

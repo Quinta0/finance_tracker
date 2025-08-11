@@ -4,8 +4,8 @@ from rest_framework.response import Response
 from django.db.models import Sum, Q
 from django.utils import timezone
 from datetime import datetime, timedelta
-from .models import Transaction, Budget
-from .serializers import TransactionSerializer, BudgetSerializer
+from .models import Transaction, Budget, Goal
+from .serializers import TransactionSerializer, BudgetSerializer, GoalSerializer
 
 class TransactionViewSet(viewsets.ModelViewSet):
     queryset = Transaction.objects.all()
@@ -151,4 +151,41 @@ class BudgetViewSet(viewsets.ModelViewSet):
                 'savings_on_track': actual_savings >= budget.savings_goal
             }
         })
+
+
+class GoalViewSet(viewsets.ModelViewSet):
+    queryset = Goal.objects.all()
+    serializer_class = GoalSerializer
+    
+    def perform_create(self, serializer):
+        """Set user when creating a goal"""
+        serializer.save(user=None)  # No auth for now
+    
+    @action(detail=True, methods=['post'])
+    def update_progress(self, request, pk=None):
+        """Update the current amount for a goal"""
+        goal = self.get_object()
+        amount = request.data.get('amount', 0)
+        
+        try:
+            goal.current_amount = float(amount)
+            goal.save()
+            return Response(GoalSerializer(goal).data)
+        except ValueError:
+            return Response(
+                {'error': 'Invalid amount'}, 
+                status=status.HTTP_400_BAD_REQUEST
+            )
+    
+    @action(detail=False, methods=['get'])
+    def active_goals(self, request):
+        """Get all active (not completed) goals"""
+        active_goals = Goal.objects.filter(completed=False)
+        return Response(GoalSerializer(active_goals, many=True).data)
+    
+    @action(detail=False, methods=['get'])
+    def completed_goals(self, request):
+        """Get all completed goals"""
+        completed_goals = Goal.objects.filter(completed=True)
+        return Response(GoalSerializer(completed_goals, many=True).data)
 

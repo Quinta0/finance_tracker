@@ -59,3 +59,32 @@ class Budget(models.Model):
     
     def __str__(self):
         return f"Budget - Income: ${self.monthly_income}"
+
+class Goal(models.Model):
+    user = models.ForeignKey(User, on_delete=models.CASCADE, null=True, blank=True)
+    name = models.CharField(max_length=100)
+    description = models.TextField(blank=True, null=True)
+    target_amount = models.DecimalField(max_digits=10, decimal_places=2)
+    current_amount = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    target_date = models.DateField()
+    completed = models.BooleanField(default=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    class Meta:
+        ordering = ['-created_at']
+    
+    def save(self, *args, **kwargs):
+        # Auto-mark as completed if current amount reaches target
+        if self.current_amount >= self.target_amount:
+            self.completed = True
+        super().save(*args, **kwargs)
+    
+    @property
+    def progress_percentage(self):
+        if self.target_amount > 0:
+            return min((self.current_amount / self.target_amount) * 100, 100)
+        return 0
+    
+    def __str__(self):
+        return f"{self.name} - ${self.current_amount}/${self.target_amount}"

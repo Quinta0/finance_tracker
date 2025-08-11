@@ -1,7 +1,7 @@
 "use client"
 import React, { useState, useEffect } from 'react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, PieChart, Pie, Cell, BarChart, Bar, ResponsiveContainer } from 'recharts';
-import { DollarSign, TrendingUp, Target, Plus, Trash2, Calculator, Activity, TrendingDown, PiggyBank, Filter, X, CheckCircle, AlertCircle, Info, Loader2, Calendar as CalendarIcon, Edit } from 'lucide-react';
+import { DollarSign, TrendingUp, Target, Plus, Trash2, Calculator, Activity, TrendingDown, PiggyBank, Filter, X, CheckCircle, AlertCircle, Info, Loader2, Calendar as CalendarIcon, Edit, BarChart3, Download, Upload, FileText, Archive, Lightbulb, Award, Zap } from 'lucide-react';
 import { z } from "zod";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -54,6 +54,16 @@ const transactionSchema = z.object({
 
 const budgetSchema = z.object({
   monthly_income: z.coerce.number().positive({ message: "Please enter a valid monthly income" }),
+});
+
+const goalSchema = z.object({
+  name: z.string().min(3, { message: "Goal name must be at least 3 characters" }),
+  target_amount: z.coerce.number().positive({ message: "Target amount must be greater than 0" }),
+  current_amount: z.coerce.number().min(0, { message: "Current amount cannot be negative" }).optional(),
+  target_date: z.date({
+    required_error: "A target date is required.",
+  }),
+  description: z.string().optional(),
 });
 
 
@@ -138,6 +148,70 @@ const spinnerStyle = `
     from { transform: rotate(0deg); }
     to { transform: rotate(360deg); }
   }
+  
+  /* Enhanced UI styles */
+  .nav-button {
+    transition: all 0.2s ease-in-out;
+    position: relative;
+    overflow: hidden;
+  }
+  
+  .nav-button:hover {
+    transform: translateY(-1px);
+  }
+  
+  .nav-button.active::before {
+    content: '';
+    position: absolute;
+    bottom: -1px;
+    left: 0;
+    right: 0;
+    height: 2px;
+    background: linear-gradient(90deg, #3b82f6, #06b6d4);
+  }
+  
+  .stat-card {
+    transition: all 0.3s ease;
+    position: relative;
+    overflow: hidden;
+  }
+  
+  .stat-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 25px rgba(59, 130, 246, 0.15);
+  }
+  
+  .stat-card::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 1px;
+    background: linear-gradient(90deg, transparent, rgba(59, 130, 246, 0.5), transparent);
+  }
+  
+  .ripple-button {
+    position: relative;
+    overflow: hidden;
+    transition: all 0.2s ease;
+  }
+  
+  .ripple-button:hover {
+    transform: scale(1.02);
+  }
+  
+  .ripple-button:active {
+    transform: scale(0.98);
+  }
+  
+  .chart-container {
+    transition: all 0.3s ease;
+  }
+  
+  .chart-container:hover {
+    transform: translateY(-1px);
+  }
 `;
 
 const PersonalFinanceTracker = () => {
@@ -164,6 +238,8 @@ const PersonalFinanceTracker = () => {
   });
   const [budgetAnalysis, setBudgetAnalysis] = useState(null);
   const [quarterFilter, setQuarterFilter] = useState('all');
+  const [goals, setGoals] = useState([]);
+  const [editingTransaction, setEditingTransaction] = useState(null);
   
   // Loading states for different operations
   const [loadingStates, setLoadingStates] = useState({
@@ -174,7 +250,10 @@ const PersonalFinanceTracker = () => {
     deleteTransaction: {},
     updateBudget: false,
     editTransaction: false,
-    initialLoad: true
+    initialLoad: true,
+    addGoal: false,
+    updateGoal: false,
+    deleteGoal: false,
   });
 
   // Toast notifications state
@@ -206,6 +285,9 @@ const PersonalFinanceTracker = () => {
   const setLoading = (key, value) => {
     setLoadingStates(prev => ({ ...prev, [key]: value }));
   };
+
+  // Chart colors
+  const COLORS = ['#3b82f6', '#ef4444', '#10b981', '#f59e0b', '#8b5cf6', '#ec4899', '#06b6d4', '#84cc16', '#f97316'];
 
   // Generate 12 months of data
   const generateYearlyData = (transactions) => {
@@ -374,7 +456,8 @@ const PersonalFinanceTracker = () => {
         fetchSixMonthTrend(),
         fetchTransactions(),
         fetchBudgetData(),
-        fetchBudgetAnalysis()
+        fetchBudgetAnalysis(),
+        fetchGoals()
       ]);
       setLoading('initialLoad', false);
     };
@@ -530,6 +613,169 @@ const PersonalFinanceTracker = () => {
     } finally {
       setLoading('updateBudget', false);
     }
+  };
+
+  // Goals Management Functions
+  const addGoal = async (data) => {
+    setLoading('addGoal', true);
+    try {
+      const response = await fetch(`${API_BASE}/goals/`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          ...data,
+          target_amount: parseFloat(data.target_amount),
+          current_amount: parseFloat(data.current_amount) || 0,
+          target_date: format(data.target_date, 'yyyy-MM-dd'),
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error(`Server error: ${response.status}`);
+      }
+
+      await fetchGoals();
+      addToast('Goal added successfully!', 'success');
+      return true;
+    } catch (error) {
+      console.error('Error adding goal:', error);
+      addToast('Failed to add goal. Please try again.', 'error');
+      return false;
+    } finally {
+      setLoading('addGoal', false);
+    }
+  };
+
+  const updateGoal = async (id, data) => {
+    setLoading('updateGoal', true);
+    try {
+      const response = await fetch(`${API_BASE}/goals/${id}/`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          ...data,
+          target_amount: parseFloat(data.target_amount),
+          current_amount: parseFloat(data.current_amount) || 0,
+          target_date: format(data.target_date, 'yyyy-MM-dd'),
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error(`Server error: ${response.status}`);
+      }
+
+      await fetchGoals();
+      addToast('Goal updated successfully!', 'success');
+      return true;
+    } catch (error) {
+      console.error('Error updating goal:', error);
+      addToast('Failed to update goal. Please try again.', 'error');
+      return false;
+    } finally {
+      setLoading('updateGoal', false);
+    }
+  };
+
+  const deleteGoal = async (id) => {
+    setLoading('deleteGoal', true);
+    try {
+      const response = await fetch(`${API_BASE}/goals/${id}/`, {
+        method: 'DELETE',
+      });
+
+      if (!response.ok && response.status !== 204) {
+        throw new Error(`Server error: ${response.status}`);
+      }
+
+      await fetchGoals();
+      addToast('Goal deleted successfully!', 'success');
+    } catch (error) {
+      console.error('Error deleting goal:', error);
+      addToast('Failed to delete goal. Please try again.', 'error');
+    } finally {
+      setLoading('deleteGoal', false);
+    }
+  };
+
+  const fetchGoals = async () => {
+    try {
+      const response = await fetch(`${API_BASE}/goals/`);
+      if (response.ok) {
+        const data = await response.json();
+        setGoals(data);
+      }
+    } catch (error) {
+      console.error('Error fetching goals:', error);
+    }
+  };
+
+  // Export/Import Functions
+  const exportToCSV = () => {
+    try {
+      const headers = ['Date', 'Type', 'Category', 'Amount', 'Description'];
+      const csvContent = [
+        headers.join(','),
+        ...transactions.map(t => [
+          t.date,
+          t.type,
+          t.category,
+          t.amount,
+          `"${t.description.replace(/"/g, '""')}"`
+        ].join(','))
+      ].join('\n');
+
+      const blob = new Blob([csvContent], { type: 'text/csv' });
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `transactions_${format(new Date(), 'yyyy-MM-dd')}.csv`;
+      a.click();
+      window.URL.revokeObjectURL(url);
+      
+      addToast('Transactions exported successfully!', 'success');
+    } catch (error) {
+      console.error('Error exporting data:', error);
+      addToast('Failed to export data. Please try again.', 'error');
+    }
+  };
+
+  const importFromCSV = (file) => {
+    const reader = new FileReader();
+    reader.onload = async (e) => {
+      try {
+        const csv = e.target.result;
+        const lines = csv.split('\n');
+        const headers = lines[0].split(',');
+        
+        for (let i = 1; i < lines.length; i++) {
+          if (lines[i].trim()) {
+            const values = lines[i].split(',');
+            const transaction = {
+              date: new Date(values[0]),
+              type: values[1],
+              category: values[2],
+              amount: parseFloat(values[3]),
+              description: values[4].replace(/"/g, '').trim()
+            };
+            
+            if (transaction.date && transaction.type && transaction.category && 
+                transaction.amount > 0 && transaction.description) {
+              await addTransaction(transaction);
+            }
+          }
+        }
+        
+        addToast('Transactions imported successfully!', 'success');
+      } catch (error) {
+        console.error('Error importing data:', error);
+        addToast('Failed to import data. Please check file format.', 'error');
+      }
+    };
+    reader.readAsText(file);
   };
 
   // Dashboard Component
@@ -1398,6 +1644,566 @@ const PersonalFinanceTracker = () => {
   };
 
   // Smart Budgeting Component  
+  // Analytics Component with Smart Insights
+  const Analytics = () => {
+    const getSpendingInsights = () => {
+      const insights = [];
+      const currentMonth = new Date().getMonth();
+      const currentMonthData = yearlyData[currentMonth];
+      const lastMonthData = yearlyData[currentMonth - 1] || yearlyData[11];
+      
+      if (currentMonthData && lastMonthData) {
+        const expenseChange = ((currentMonthData.expenses - lastMonthData.expenses) / lastMonthData.expenses) * 100;
+        if (expenseChange > 20) {
+          insights.push({
+            type: 'warning',
+            title: 'High Spending Alert',
+            message: `Your expenses increased by ${expenseChange.toFixed(1)}% compared to last month.`,
+            icon: AlertCircle
+          });
+        } else if (expenseChange < -10) {
+          insights.push({
+            type: 'success',
+            title: 'Great Savings!',
+            message: `You reduced expenses by ${Math.abs(expenseChange).toFixed(1)}% this month.`,
+            icon: CheckCircle
+          });
+        }
+      }
+
+      // Category-based insights
+      const categoryTotals = transactions.reduce((acc, t) => {
+        if (t.type === 'expense') {
+          acc[t.category] = (acc[t.category] || 0) + parseFloat(t.amount);
+        }
+        return acc;
+      }, {});
+
+      const topCategory = Object.entries(categoryTotals).sort(([,a], [,b]) => b - a)[0];
+      if (topCategory && topCategory[1] > 1000) {
+        insights.push({
+          type: 'info',
+          title: 'Top Spending Category',
+          message: `You spent $${topCategory[1].toLocaleString()} on ${topCategory[0]} this period.`,
+          icon: Info
+        });
+      }
+
+      return insights;
+    };
+
+    const insights = getSpendingInsights();
+
+    return (
+      <div style={{ padding: '24px', maxWidth: '1200px', margin: '0 auto' }}>
+        {/* Export/Import Section */}
+        <div style={{ 
+          backgroundColor: '#2a2a2a', 
+          borderRadius: '12px', 
+          padding: '20px', 
+          marginBottom: '24px', 
+          border: '1px solid #3a3a3a'
+        }}>
+          <h3 style={{ color: '#e5e7eb', fontSize: '18px', fontWeight: '600', marginBottom: '16px', display: 'flex', alignItems: 'center' }}>
+            <Archive style={{ width: '20px', height: '20px', color: '#3b82f6', marginRight: '8px' }} />
+            Data Management
+          </h3>
+          <div style={{ display: 'flex', gap: '16px', flexWrap: 'wrap' }}>
+            <Button 
+              onClick={exportToCSV}
+              style={{
+                backgroundColor: '#10b981',
+                color: 'white',
+                border: 'none',
+                padding: '8px 16px',
+                borderRadius: '6px',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px'
+              }}
+            >
+              <Download style={{ width: '16px', height: '16px' }} />
+              Export to CSV
+            </Button>
+            <label style={{
+              backgroundColor: '#3b82f6',
+              color: 'white',
+              border: 'none',
+              padding: '8px 16px',
+              borderRadius: '6px',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px',
+              cursor: 'pointer'
+            }}>
+              <Upload style={{ width: '16px', height: '16px' }} />
+              Import CSV
+              <input 
+                type="file" 
+                accept=".csv" 
+                onChange={(e) => e.target.files[0] && importFromCSV(e.target.files[0])}
+                style={{ display: 'none' }}
+              />
+            </label>
+          </div>
+        </div>
+
+        {/* Smart Insights */}
+        <div style={{ 
+          backgroundColor: '#2a2a2a', 
+          borderRadius: '12px', 
+          padding: '20px', 
+          marginBottom: '24px', 
+          border: '1px solid #3a3a3a'
+        }}>
+          <h3 style={{ color: '#e5e7eb', fontSize: '18px', fontWeight: '600', marginBottom: '16px', display: 'flex', alignItems: 'center' }}>
+            <Lightbulb style={{ width: '20px', height: '20px', color: '#f59e0b', marginRight: '8px' }} />
+            Smart Insights
+          </h3>
+          <div style={{ display: 'grid', gap: '12px' }}>
+            {insights.length > 0 ? insights.map((insight, index) => (
+              <div key={index} style={{
+                backgroundColor: '#1a1a1a',
+                border: `1px solid ${insight.type === 'warning' ? '#ef4444' : insight.type === 'success' ? '#10b981' : '#3b82f6'}`,
+                borderRadius: '8px',
+                padding: '16px',
+                display: 'flex',
+                alignItems: 'flex-start',
+                gap: '12px'
+              }}>
+                <insight.icon style={{ 
+                  width: '20px', 
+                  height: '20px', 
+                  color: insight.type === 'warning' ? '#ef4444' : insight.type === 'success' ? '#10b981' : '#3b82f6',
+                  marginTop: '2px'
+                }} />
+                <div>
+                  <h4 style={{ 
+                    color: '#e5e7eb', 
+                    fontSize: '14px', 
+                    fontWeight: '600', 
+                    marginBottom: '4px' 
+                  }}>
+                    {insight.title}
+                  </h4>
+                  <p style={{ color: '#9ca3af', fontSize: '13px', margin: 0 }}>
+                    {insight.message}
+                  </p>
+                </div>
+              </div>
+            )) : (
+              <div style={{
+                backgroundColor: '#1a1a1a',
+                borderRadius: '8px',
+                padding: '20px',
+                textAlign: 'center',
+                color: '#6b7280'
+              }}>
+                <Info style={{ width: '24px', height: '24px', margin: '0 auto 8px', opacity: 0.5 }} />
+                <p>Add more transactions to see personalized insights</p>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Detailed Charts */}
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(400px, 1fr))', gap: '24px' }}>
+          {/* Monthly Trend */}
+          <div style={{ 
+            backgroundColor: '#2a2a2a', 
+            borderRadius: '12px', 
+            padding: '20px', 
+            border: '1px solid #3a3a3a'
+          }}>
+            <h3 style={{ color: '#e5e7eb', fontSize: '16px', fontWeight: '600', marginBottom: '16px' }}>
+              Monthly Trend Analysis
+            </h3>
+            <ResponsiveContainer width="100%" height={250}>
+              <LineChart data={yearlyData}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#3a3a3a" />
+                <XAxis dataKey="month" stroke="#9ca3af" fontSize={12} />
+                <YAxis stroke="#9ca3af" fontSize={12} />
+                <Tooltip 
+                  contentStyle={{ 
+                    backgroundColor: '#1a1a1a', 
+                    border: '1px solid #3a3a3a',
+                    borderRadius: '8px',
+                    color: '#e5e7eb'
+                  }} 
+                />
+                <Line type="monotone" dataKey="income" stroke="#10b981" strokeWidth={2} />
+                <Line type="monotone" dataKey="expenses" stroke="#ef4444" strokeWidth={2} />
+                <Line type="monotone" dataKey="net" stroke="#3b82f6" strokeWidth={2} />
+              </LineChart>
+            </ResponsiveContainer>
+          </div>
+
+          {/* Category Breakdown */}
+          <div style={{ 
+            backgroundColor: '#2a2a2a', 
+            borderRadius: '12px', 
+            padding: '20px', 
+            border: '1px solid #3a3a3a'
+          }}>
+            <h3 style={{ color: '#e5e7eb', fontSize: '16px', fontWeight: '600', marginBottom: '16px' }}>
+              Expense Categories
+            </h3>
+            <ResponsiveContainer width="100%" height={250}>
+              <PieChart>
+                <Pie
+                  data={Object.entries(dashboardData.expense_breakdown).map(([key, value]) => ({
+                    name: key.charAt(0).toUpperCase() + key.slice(1),
+                    value
+                  }))}
+                  cx="50%"
+                  cy="50%"
+                  outerRadius={80}
+                  fill="#8884d8"
+                  dataKey="value"
+                  label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
+                >
+                  {Object.entries(dashboardData.expense_breakdown).map((entry, index) => (
+                    <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                  ))}
+                </Pie>
+                <Tooltip 
+                  contentStyle={{ 
+                    backgroundColor: '#1a1a1a', 
+                    border: '1px solid #3a3a3a',
+                    borderRadius: '8px',
+                    color: '#e5e7eb'
+                  }} 
+                />
+              </PieChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  // Goals Component
+  const Goals = () => {
+    const goalForm = useForm({
+      resolver: zodResolver(goalSchema),
+      defaultValues: {
+        name: '',
+        target_amount: '',
+        current_amount: 0,
+        target_date: new Date(),
+        description: '',
+      },
+    });
+
+    const onSubmitGoal = async (data) => {
+      const success = await addGoal(data);
+      if (success) {
+        goalForm.reset({
+          name: '',
+          target_amount: '',
+          current_amount: 0,
+          target_date: new Date(),
+          description: '',
+        });
+      }
+    };
+
+    const calculateProgress = (current, target) => {
+      return Math.min((current / target) * 100, 100);
+    };
+
+    const getDaysRemaining = (targetDate) => {
+      const today = new Date();
+      const target = new Date(targetDate);
+      const diffTime = target - today;
+      const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+      return diffDays;
+    };
+
+    return (
+      <div style={{ padding: '24px', maxWidth: '1200px', margin: '0 auto' }}>
+        {/* Add Goal Form */}
+        <div style={{ 
+          backgroundColor: '#2a2a2a', 
+          borderRadius: '12px', 
+          padding: '20px', 
+          marginBottom: '24px', 
+          border: '1px solid #3a3a3a'
+        }}>
+          <h3 style={{ color: '#e5e7eb', fontSize: '18px', fontWeight: '600', marginBottom: '16px', display: 'flex', alignItems: 'center' }}>
+            <Target style={{ width: '20px', height: '20px', color: '#3b82f6', marginRight: '8px' }} />
+            Add New Goal
+          </h3>
+          <Form {...goalForm}>
+            <form onSubmit={goalForm.handleSubmit(onSubmitGoal)} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '16px' }}>
+                <FormField
+                  control={goalForm.control}
+                  name="name"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormControl>
+                        <Input 
+                          placeholder="Goal name (e.g., Vacation Fund)" 
+                          style={{ 
+                            backgroundColor: '#1a1a1a', 
+                            borderColor: '#3a3a3a', 
+                            color: '#e5e7eb',
+                            height: '38px'
+                          }} 
+                          {...field} 
+                        />
+                      </FormControl>
+                      <FormMessage style={{ color: '#ef4444', fontSize: '12px', marginTop: '4px' }} />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={goalForm.control}
+                  name="target_amount"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormControl>
+                        <Input 
+                          type="number" 
+                          placeholder="Target amount" 
+                          style={{ 
+                            backgroundColor: '#1a1a1a', 
+                            borderColor: '#3a3a3a', 
+                            color: '#e5e7eb',
+                            height: '38px'
+                          }} 
+                          {...field} 
+                        />
+                      </FormControl>
+                      <FormMessage style={{ color: '#ef4444', fontSize: '12px', marginTop: '4px' }} />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={goalForm.control}
+                  name="current_amount"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormControl>
+                        <Input 
+                          type="number" 
+                          placeholder="Current amount" 
+                          style={{ 
+                            backgroundColor: '#1a1a1a', 
+                            borderColor: '#3a3a3a', 
+                            color: '#e5e7eb',
+                            height: '38px'
+                          }} 
+                          {...field} 
+                        />
+                      </FormControl>
+                      <FormMessage style={{ color: '#ef4444', fontSize: '12px', marginTop: '4px' }} />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={goalForm.control}
+                  name="target_date"
+                  render={({ field }) => (
+                    <FormItem>
+                      <Popover>
+                        <PopoverTrigger asChild>
+                          <FormControl>
+                            <Button
+                              variant={"outline"}
+                              style={{
+                                backgroundColor: '#1a1a1a', 
+                                borderColor: '#3a3a3a', 
+                                color: field.value ? '#e5e7eb' : '#6b7280',
+                                width: '100%',
+                                height: '38px',
+                                display: 'flex',
+                                justifyContent: 'flex-start',
+                                textAlign: 'left'
+                              }}
+                            >
+                              <CalendarIcon style={{ width: '16px', height: '16px', marginRight: '8px', color: '#3b82f6' }} />
+                              {field.value ? format(field.value, "PPP") : <span>Target date</span>}
+                            </Button>
+                          </FormControl>
+                        </PopoverTrigger>
+                        <PopoverContent style={{ 
+                          width: 'auto', 
+                          padding: 0, 
+                          backgroundColor: '#2a2a2a', 
+                          borderColor: '#3a3a3a' 
+                        }} align="start">
+                          <Calendar
+                            mode="single"
+                            selected={field.value}
+                            onSelect={field.onChange}
+                            initialFocus
+                          />
+                        </PopoverContent>
+                      </Popover>
+                      <FormMessage style={{ color: '#ef4444', fontSize: '12px', marginTop: '4px' }} />
+                    </FormItem>
+                  )}
+                />
+              </div>
+              <FormField
+                control={goalForm.control}
+                name="description"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormControl>
+                      <Input 
+                        placeholder="Description (optional)" 
+                        style={{ 
+                          backgroundColor: '#1a1a1a', 
+                          borderColor: '#3a3a3a', 
+                          color: '#e5e7eb',
+                          height: '38px'
+                        }} 
+                        {...field} 
+                      />
+                    </FormControl>
+                    <FormMessage style={{ color: '#ef4444', fontSize: '12px', marginTop: '4px' }} />
+                  </FormItem>
+                )}
+              />
+              <Button 
+                type="submit" 
+                disabled={loadingStates.addGoal} 
+                style={{
+                  backgroundColor: '#3b82f6',
+                  color: 'white',
+                  border: 'none',
+                  padding: '0 16px',
+                  height: '38px',
+                  borderRadius: '6px',
+                  cursor: loadingStates.addGoal ? 'not-allowed' : 'pointer',
+                  opacity: loadingStates.addGoal ? 0.7 : 1,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '8px',
+                  width: 'fit-content'
+                }}
+              >
+                {loadingStates.addGoal ? (
+                  <>
+                    <LoadingSpinner size={16} />
+                    <span>Adding...</span>
+                  </>
+                ) : (
+                  <>
+                    <Plus style={{ width: '16px', height: '16px' }} />
+                    Add Goal
+                  </>
+                )}
+              </Button>
+            </form>
+          </Form>
+        </div>
+
+        {/* Goals List */}
+        <div style={{ display: 'grid', gap: '16px' }}>
+          {goals.length > 0 ? goals.map((goal) => {
+            const progress = calculateProgress(goal.current_amount, goal.target_amount);
+            const daysRemaining = getDaysRemaining(goal.target_date);
+            const isCompleted = progress >= 100;
+            
+            return (
+              <div key={goal.id} style={{
+                backgroundColor: '#2a2a2a',
+                borderRadius: '12px',
+                padding: '20px',
+                border: `1px solid ${isCompleted ? '#10b981' : '#3a3a3a'}`
+              }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '16px' }}>
+                  <div>
+                    <h4 style={{ color: '#e5e7eb', fontSize: '18px', fontWeight: '600', marginBottom: '4px', display: 'flex', alignItems: 'center' }}>
+                      {isCompleted && <Award style={{ width: '20px', height: '20px', color: '#10b981', marginRight: '8px' }} />}
+                      {goal.name}
+                    </h4>
+                    {goal.description && (
+                      <p style={{ color: '#9ca3af', fontSize: '14px', margin: 0 }}>{goal.description}</p>
+                    )}
+                  </div>
+                  <Button
+                    onClick={() => {
+                      if (confirm('Are you sure you want to delete this goal?')) {
+                        deleteGoal(goal.id);
+                      }
+                    }}
+                    style={{
+                      backgroundColor: 'transparent',
+                      border: '1px solid #ef4444',
+                      color: '#ef4444',
+                      padding: '4px 8px',
+                      borderRadius: '4px'
+                    }}
+                  >
+                    <Trash2 style={{ width: '14px', height: '14px' }} />
+                  </Button>
+                </div>
+                
+                <div style={{ marginBottom: '12px' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
+                    <span style={{ color: '#e5e7eb', fontSize: '14px', fontWeight: '500' }}>
+                      ${goal.current_amount.toLocaleString()} / ${goal.target_amount.toLocaleString()}
+                    </span>
+                    <span style={{ color: isCompleted ? '#10b981' : '#3b82f6', fontSize: '14px', fontWeight: '600' }}>
+                      {progress.toFixed(1)}%
+                    </span>
+                  </div>
+                  <div style={{
+                    width: '100%',
+                    height: '8px',
+                    backgroundColor: '#1a1a1a',
+                    borderRadius: '4px',
+                    overflow: 'hidden'
+                  }}>
+                    <div style={{
+                      width: `${progress}%`,
+                      height: '100%',
+                      backgroundColor: isCompleted ? '#10b981' : '#3b82f6',
+                      transition: 'width 0.3s ease'
+                    }} />
+                  </div>
+                </div>
+                
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <span style={{ color: '#9ca3af', fontSize: '12px' }}>
+                    {daysRemaining > 0 ? `${daysRemaining} days remaining` : 
+                     daysRemaining === 0 ? 'Due today' : 
+                     `${Math.abs(daysRemaining)} days overdue`}
+                  </span>
+                  <span style={{ color: '#9ca3af', fontSize: '12px' }}>
+                    Target: {format(new Date(goal.target_date), 'MMM dd, yyyy')}
+                  </span>
+                </div>
+              </div>
+            );
+          }) : (
+            <div style={{
+              backgroundColor: '#2a2a2a',
+              borderRadius: '12px',
+              padding: '40px',
+              textAlign: 'center',
+              border: '1px solid #3a3a3a'
+            }}>
+              <Target style={{ width: '48px', height: '48px', color: '#6b7280', margin: '0 auto 16px', opacity: 0.5 }} />
+              <h3 style={{ color: '#e5e7eb', fontSize: '18px', fontWeight: '600', marginBottom: '8px' }}>
+                No Goals Yet
+              </h3>
+              <p style={{ color: '#9ca3af', fontSize: '14px', margin: 0 }}>
+                Set your first financial goal to start tracking your progress
+              </p>
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  };
+
   const SmartBudgeting = () => {
     const budgetForm = useForm({
       resolver: zodResolver(budgetSchema),
@@ -1644,13 +2450,22 @@ const PersonalFinanceTracker = () => {
             {[
               { id: 'dashboard', name: 'Dashboard', icon: Activity },
               { id: 'transactions', name: 'Transactions', icon: DollarSign },
-              { id: 'budget', name: 'Smart Budget', icon: Target }
+              { id: 'analytics', name: 'Analytics', icon: BarChart3 },
+              { id: 'goals', name: 'Goals', icon: Target },
+              { id: 'budget', name: 'Smart Budget', icon: PiggyBank }
             ].map((tab) => (
               <Button
                 key={tab.id}
                 variant={activeTab === tab.id ? 'secondary' : 'ghost'}
                 onClick={() => setActiveTab(tab.id)}
-                className="flex items-center gap-2"
+                className={`flex items-center gap-2 nav-button ${activeTab === tab.id ? 'active' : ''}`}
+                style={{
+                  padding: '12px 20px',
+                  borderRadius: '8px',
+                  fontWeight: activeTab === tab.id ? '600' : '500',
+                  color: activeTab === tab.id ? '#e5e7eb' : '#9ca3af',
+                  backgroundColor: activeTab === tab.id ? '#3b82f6' : 'transparent',
+                }}
               >
                 <tab.icon className="h-4 w-4" />
                 {tab.name}
@@ -1679,6 +2494,8 @@ const PersonalFinanceTracker = () => {
           <>
             {activeTab === 'dashboard' && <Dashboard />}
             {activeTab === 'transactions' && <Transactions />}
+            {activeTab === 'analytics' && <Analytics />}
+            {activeTab === 'goals' && <Goals />}
             {activeTab === 'budget' && <SmartBudgeting />}
           </>
         )}

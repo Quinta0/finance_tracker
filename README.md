@@ -87,57 +87,114 @@ FINANCE_TRACKER/
 ## 🎯 Features
 
 - ✅ **Dashboard** - Financial overview with charts and trends
-- ✅ **Transaction Management** - Add, view, and delete income/expenses
+- ✅ **Transaction Management** - Add, view, edit, and delete income/expenses
 - ✅ **Smart Budgeting** - 50/30/20 rule implementation
+- ✅ **Expense Analytics & Insights** - Smart spending analysis with recommendations
+- ✅ **Financial Goals Tracker** - Set and track savings goals with progress visualization
+- ✅ **Data Export/Import** - Export transactions to CSV and import data
 - ✅ **6-Month Trends** - Historical savings data
 - ✅ **Budget Analysis** - Real-time spending vs budget comparison
+- ✅ **Enhanced UI/UX** - Modern design with smooth animations and transitions
 - ✅ **SQLite Database** - Persistent data storage
 
 ## 📊 API Endpoints
 
+### Transactions
 - `GET /api/transactions/` - List all transactions
 - `POST /api/transactions/` - Create new transaction
+- `PUT /api/transactions/{id}/` - Update transaction
 - `DELETE /api/transactions/{id}/` - Delete transaction
 - `GET /api/transactions/monthly_summary/` - Current month summary
 - `GET /api/transactions/six_month_trend/` - 6-month trend data
+
+### Budget
 - `GET /api/budget/current_budget/` - Get current budget
 - `POST /api/budget/update_income/` - Update monthly income
 - `GET /api/budget/budget_analysis/` - Budget vs actual analysis
 
+### Goals
+- `GET /api/goals/` - List all financial goals
+- `POST /api/goals/` - Create new goal
+- `PUT /api/goals/{id}/` - Update goal
+- `DELETE /api/goals/{id}/` - Delete goal
+- `GET /api/goals/active_goals/` - Get active goals only
+- `GET /api/goals/completed_goals/` - Get completed goals only
+- `POST /api/goals/{id}/update_progress/` - Update goal progress
+
 ## 🐛 Known Issues (TODO)
 
 ### Critical Bugs
-- [x] **Cursor jumping in input fields** - Form inputs lose focus/cursor position while typing
-- [x] **Transaction form validation** - Better client-side validation needed
-- [x] **Error handling** - Improve user feedback for API failures
-- [x] **Loading states** - Add loading indicators for all API calls
+- ✅ **Cursor jumping in input fields** - Form inputs lose focus/cursor position while typing
+- ✅ **Transaction form validation** - Better client-side validation needed
+- ✅ **Error handling** - Improve user feedback for API failures
+- ✅ **Loading states** - Add loading indicators for all API calls
 
 ### UI/UX Improvements
-- [ ] **Responsive design** - Better mobile/tablet layout
-- [ ] **Form validation** - Real-time validation with error messages
-- [x] **Confirmation dialogs** - Better delete confirmations
-- [ ] **Toast notifications** - Replace alerts with modern notifications
-- [ ] **Empty states** - Better messaging when no data exists
-- [x] **Date picker** - Improve date selection UX
+- ✅ **Responsive design** - Better mobile/tablet layout
+- ✅ **Form validation** - Real-time validation with error messages
+- ✅ **Confirmation dialogs** - Better delete confirmations
+- ✅ **Toast notifications** - Replace alerts with modern notifications
+- ✅ **Empty states** - Better messaging when no data exists
+- ✅ **Date picker** - Improve date selection UX
+- ✅ **Enhanced navigation** - Modern navigation with smooth transitions and active states
+- ✅ **Visual improvements** - Added hover effects, animations, and better styling
+- [ ] **Improve the navigation bar** - Use the Navigation menu components from shadcn
 
 ### Features to Add
 - [ ] **Multiple budgets** - Support for different budget periods
 - [ ] **Categories management** - Custom expense/income categories
-- [x] **Edit transactions** - Edit feature inside the transactions page for editing a transaction
-- [ ] **Data export** - Export transactions to CSV/PDF
+- ✅ **Edit transactions** - Edit feature inside the transactions page for editing a transaction
+- ✅ **Data export** - Export transactions to CSV/PDF
 - [ ] **Recurring transactions** - Monthly bills, salary automation
-- [ ] **Goals tracking** - Savings goals and progress
+- ✅ **Goals tracking** - Savings goals and progress
+- ✅ **Smart insights** - Automated spending analysis and recommendations
 - [ ] **Reports** - Detailed financial reports
 - [ ] **Search & filters** - Transaction search and filtering
-- [ ] **Data visualization** - More chart types and insights
+- ✅ **Data visualization** - More chart types and insights
 
 ### Technical Improvements
-- [ ] **Error boundaries** - React error boundaries for better error handling
+- ✅ **Error boundaries** - React error boundaries for better error handling
 - [ ] **API caching** - Implement caching for better performance
 - [ ] **Database optimization** - Add indexes and optimize queries
 - [ ] **Docker setup** - Containerization for easy deployment
 - [ ] **Environment variables** - Proper config management
 - [ ] **Pagination** - Handle large transaction lists
+
+## ✨ Recent Updates (v2.0)
+
+### 🚀 Major Features Added:
+1. **📊 Expense Analytics & Insights**
+   - Smart spending pattern analysis
+   - Automated insights and recommendations 
+   - Warning alerts for unusual spending
+   - Detailed charts and visualizations
+
+2. **🎯 Financial Goals Tracker**
+   - Create and track financial goals
+   - Progress visualization with progress bars
+   - Target date tracking with countdown
+   - Goal completion badges
+
+3. **📁 Data Management**
+   - Export transactions to CSV format
+   - Import transactions from CSV files
+   - Data backup and restore functionality
+
+### 🎨 UI/UX Enhancements:
+- ✅ Enhanced navigation with smooth transitions
+- ✅ Modern button styling with hover effects
+- ✅ Improved form layouts and validation
+- ✅ Toast notification system
+- ✅ Loading states for all operations
+- ✅ Better responsive design
+- ✅ Enhanced color scheme and typography
+
+### 🔧 Technical Improvements:
+- ✅ Added comprehensive form validation with Zod
+- ✅ Implemented proper error handling
+- ✅ Enhanced API endpoints for goals management
+- ✅ Better state management and loading indicators
+- ✅ Improved database models with Goal tracking
 
 
 ## 🛠️ Development
