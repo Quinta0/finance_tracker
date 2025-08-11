@@ -52,6 +52,8 @@ staticfiles/
 static/
 
 # Django migrations (privacy - may contain sensitive schema info)
+*/migrations/
+!*/migrations/__init__.py
 */migrations/__pycache__/
 */migrations/*.pyc
 
