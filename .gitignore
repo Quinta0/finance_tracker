@@ -307,3 +307,4 @@ personal/
 backend/finance/__pycache__
 backend/finance/migrations
 backend/finance_tracker/__pycache__
+backend/lib64
