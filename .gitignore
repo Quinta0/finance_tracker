@@ -304,3 +304,6 @@ fixtures/private/
 TODO.md
 NOTES.md
 personal/
+backend/finance/__pycache__
+backend/finance/migrations
+backend/finance_tracker/__pycache__
