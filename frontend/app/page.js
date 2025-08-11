@@ -1,7 +1,144 @@
 "use client"
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, PieChart, Pie, Cell, BarChart, Bar, ResponsiveContainer } from 'recharts';
-import { DollarSign, TrendingUp, Target, Plus, Trash2, Calculator, Activity, TrendingDown, PiggyBank, Filter } from 'lucide-react';
+import { DollarSign, TrendingUp, Target, Plus, Trash2, Calculator, Activity, TrendingDown, PiggyBank, Filter, X, CheckCircle, AlertCircle, Info, Loader2, Calendar as CalendarIcon, Edit } from 'lucide-react';
+import { z } from "zod";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { Button } from "@/components/ui/button";
+import {
+  Form,
+  FormControl,
+  FormField,
+  FormItem,
+  FormMessage,
+} from "@/components/ui/form";
+import { Input } from "@/components/ui/input";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+  DialogFooter,
+  DialogClose,
+} from "@/components/ui/dialog"
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Calendar } from "@/components/ui/calendar";
+import { format } from "date-fns";
+import { cn } from "@/lib/utils";
+
+const transactionSchema = z.object({
+  id: z.number().optional(),
+  type: z.enum(['expense', 'income']),
+  category: z.string(),
+  amount: z.coerce.number().positive({ message: "Amount must be greater than 0" }),
+  description: z.string().min(3, { message: "Description must be at least 3 characters" }),
+  date: z.date({
+    required_error: "A date is required.",
+  }),
+});
+
+const budgetSchema = z.object({
+  monthly_income: z.coerce.number().positive({ message: "Please enter a valid monthly income" }),
+});
+
+
+// Toast Notification Component
+const Toast = ({ message, type = 'info', onClose }) => {
+  const [isVisible, setIsVisible] = useState(true);
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setIsVisible(false);
+      setTimeout(onClose, 300);
+    }, 4000);
+    return () => clearTimeout(timer);
+  }, [onClose]);
+
+  const bgColor = {
+    success: '#10b981',
+    error: '#ef4444',
+    warning: '#f59e0b',
+    info: '#3b82f6'
+  }[type];
+
+  const Icon = {
+    success: CheckCircle,
+    error: AlertCircle,
+    warning: AlertCircle,
+    info: Info
+  }[type];
+
+  return (
+    <div style={{
+      position: 'fixed',
+      bottom: '20px',
+      right: '20px',
+      backgroundColor: '#2a2a2a',
+      border: `1px solid ${bgColor}`,
+      borderRadius: '8px',
+      padding: '16px',
+      display: 'flex',
+      alignItems: 'center',
+      gap: '12px',
+      minWidth: '300px',
+      maxWidth: '500px',
+      boxShadow: '0 10px 40px rgba(0,0,0,0.5)',
+      opacity: isVisible ? 1 : 0,
+      transform: isVisible ? 'translateY(0)' : 'translateY(20px)',
+      transition: 'all 0.3s ease',
+      zIndex: 1000
+    }}>
+      <Icon style={{ width: '20px', height: '20px', color: bgColor, flexShrink: 0 }} />
+      <div style={{ flex: 1 }}>
+        <p style={{ color: '#e5e7eb', fontSize: '14px', margin: 0 }}>{message}</p>
+      </div>
+      <Button
+        variant="ghost"
+        size="icon"
+        onClick={() => {
+          setIsVisible(false);
+          setTimeout(onClose, 300);
+        }}
+      >
+        <X className="h-4 w-4" />
+      </Button>
+    </div>
+  );
+};
+
+// Loading Spinner Component
+const LoadingSpinner = ({ size = 20 }) => (
+  <Loader2 
+    style={{ 
+      width: `${size}px`, 
+      height: `${size}px`, 
+      animation: 'spin 1s linear infinite' 
+    }} 
+  />
+);
+
+// Add CSS for spinner animation
+const spinnerStyle = `
+  @keyframes spin {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
+  }
+`;
 
 const PersonalFinanceTracker = () => {
   // API Base URL
@@ -26,20 +163,49 @@ const PersonalFinanceTracker = () => {
     savings_goal: 1000
   });
   const [budgetAnalysis, setBudgetAnalysis] = useState(null);
-  const [budgetInput, setBudgetInput] = useState('5000');
-  const [loading, setLoading] = useState(false);
   const [quarterFilter, setQuarterFilter] = useState('all');
   
-  // Form refs to prevent re-renders
-  const typeRef = useRef('expense');
-  const categoryRef = useRef('food');
-  const amountRef = useRef('');
-  const descriptionRef = useRef('');
-  const dateRef = useRef(new Date().toISOString().split('T')[0]);
+  // Loading states for different operations
+  const [loadingStates, setLoadingStates] = useState({
+    dashboard: false,
+    transactions: false,
+    budget: false,
+    addTransaction: false,
+    deleteTransaction: {},
+    updateBudget: false,
+    editTransaction: false,
+    initialLoad: true
+  });
+
+  // Toast notifications state
+  const [toasts, setToasts] = useState([]);
 
   // Categories
   const expenseCategories = ['food', 'transportation', 'entertainment', 'shopping', 'bills', 'healthcare', 'rent', 'utilities', 'other'];
   const incomeCategories = ['salary', 'freelance', 'investment', 'bonus', 'other'];
+
+  // Add spinner styles to document
+  useEffect(() => {
+    const styleElement = document.createElement('style');
+    styleElement.textContent = spinnerStyle;
+    document.head.appendChild(styleElement);
+    return () => document.head.removeChild(styleElement);
+  }, []);
+
+  // Toast notification helper
+  const addToast = (message, type = 'info') => {
+    const id = Date.now();
+    setToasts(prev => [...prev, { id, message, type }]);
+  };
+
+  const removeToast = (id) => {
+    setToasts(prev => prev.filter(toast => toast.id !== id));
+  };
+
+  // Update loading state helper
+  const setLoading = (key, value) => {
+    setLoadingStates(prev => ({ ...prev, [key]: value }));
+  };
 
   // Generate 12 months of data
   const generateYearlyData = (transactions) => {
@@ -122,91 +288,103 @@ const PersonalFinanceTracker = () => {
     }));
   };
 
-  // API Functions
+  // API Functions with error handling
   const fetchDashboardData = async () => {
+    setLoading('dashboard', true);
     try {
       const response = await fetch(`${API_BASE}/transactions/monthly_summary/`);
+      if (!response.ok) throw new Error(`Server error: ${response.status}`);
       const data = await response.json();
       setDashboardData(data);
     } catch (error) {
       console.error('Error fetching dashboard data:', error);
+      addToast('Failed to load dashboard data. Please check your connection.', 'error');
+    } finally {
+      setLoading('dashboard', false);
     }
   };
 
   const fetchSixMonthTrend = async () => {
     try {
       const response = await fetch(`${API_BASE}/transactions/six_month_trend/`);
+      if (!response.ok) throw new Error(`Server error: ${response.status}`);
       const data = await response.json();
       // Fix the savings calculation
       const fixedData = data.map(month => ({
         ...month,
-        savings: month.income - month.expenses // Correct calculation
+        savings: month.income - month.expenses
       }));
       setSixMonthTrend(fixedData);
     } catch (error) {
       console.error('Error fetching trend data:', error);
+      addToast('Failed to load trend data.', 'error');
     }
   };
 
   const fetchTransactions = async () => {
+    setLoading('transactions', true);
     try {
       const response = await fetch(`${API_BASE}/transactions/`);
+      if (!response.ok) throw new Error(`Server error: ${response.status}`);
       const data = await response.json();
       const transactionData = data.results || data;
       setTransactions(transactionData);
       setYearlyData(generateYearlyData(transactionData));
     } catch (error) {
       console.error('Error fetching transactions:', error);
+      addToast('Failed to load transactions. Please check if the backend is running.', 'error');
+    } finally {
+      setLoading('transactions', false);
     }
   };
 
   const fetchBudgetData = async () => {
+    setLoading('budget', true);
     try {
       const response = await fetch(`${API_BASE}/budget/current_budget/`);
+      if (!response.ok) throw new Error(`Server error: ${response.status}`);
       const data = await response.json();
       setBudgetData(data);
     } catch (error) {
       console.error('Error fetching budget data:', error);
+      addToast('Failed to load budget data.', 'error');
+    } finally {
+      setLoading('budget', false);
     }
   };
 
   const fetchBudgetAnalysis = async () => {
     try {
       const response = await fetch(`${API_BASE}/budget/budget_analysis/`);
+      if (!response.ok) throw new Error(`Server error: ${response.status}`);
       const data = await response.json();
       setBudgetAnalysis(data);
     } catch (error) {
       console.error('Error fetching budget analysis:', error);
+      addToast('Failed to load budget analysis.', 'error');
     }
   };
 
   // Load data on component mount
   useEffect(() => {
-    fetchDashboardData();
-    fetchSixMonthTrend();
-    fetchTransactions();
-    fetchBudgetData();
-    fetchBudgetAnalysis();
+    const loadAllData = async () => {
+      setLoading('initialLoad', true);
+      await Promise.all([
+        fetchDashboardData(),
+        fetchSixMonthTrend(),
+        fetchTransactions(),
+        fetchBudgetData(),
+        fetchBudgetAnalysis()
+      ]);
+      setLoading('initialLoad', false);
+    };
+    
+    loadAllData();
   }, []);
 
-  // Update budget input when budget data is loaded
-  useEffect(() => {
-    if (budgetData.monthly_income) {
-      setBudgetInput(budgetData.monthly_income.toString());
-    }
-  }, [budgetData.monthly_income]);
-
-  // Add new transaction
-  const addTransaction = async () => {
-    const amount = amountRef.current;
-    const description = descriptionRef.current;
-    
-    if (!amount || !description || parseFloat(amount) <= 0) {
-      alert('Please fill in all fields with valid values');
-      return;
-    }
-
-    setLoading(true);
+  // Add new transaction with validation
+  const addTransaction = async (data) => {
+    setLoading('addTransaction', true);
     try {
       const response = await fetch(`${API_BASE}/transactions/`, {
         method: 'POST',
@@ -214,71 +392,119 @@ const PersonalFinanceTracker = () => {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          type: typeRef.current,
-          category: categoryRef.current,
-          amount: parseFloat(amount),
-          description: description.trim(),
-          date: dateRef.current
+          ...data,
+          amount: parseFloat(data.amount),
+          description: data.description.trim(),
+          date: format(data.date, 'yyyy-MM-dd'),
         }),
       });
 
-      if (response.ok) {
-        // Clear form using refs
-        amountRef.current = '';
-        descriptionRef.current = '';
-        // Update the actual input elements
-        document.getElementById('amount-input').value = '';
-        document.getElementById('description-input').value = '';
-
-        // Refresh data
-        await Promise.all([
-          fetchDashboardData(),
-          fetchSixMonthTrend(),
-          fetchTransactions(),
-          fetchBudgetAnalysis()
-        ]);
-        
-        alert('Transaction added successfully!');
-      } else {
-        alert(`Error adding transaction: ${response.status}`);
+      if (!response.ok) {
+        throw new Error(`Server error: ${response.status}`);
       }
+
+      // Refresh data
+      await Promise.all([
+        fetchDashboardData(),
+        fetchSixMonthTrend(),
+        fetchTransactions(),
+        fetchBudgetAnalysis()
+      ]);
+      
+      addToast('Transaction added successfully!', 'success');
+      return true; // Indicate success
     } catch (error) {
       console.error('Error adding transaction:', error);
-      alert('Could not connect to server. Make sure Django backend is running on http://localhost:8000');
+      addToast('Failed to add transaction. Please check your connection and try again.', 'error');
+      return false; // Indicate failure
+    } finally {
+      setLoading('addTransaction', false);
     }
-    setLoading(false);
   };
 
-  // Delete transaction
+  const editTransaction = async (data) => {
+    setLoading('editTransaction', true);
+    try {
+      const response = await fetch(`${API_BASE}/transactions/${data.id}/`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          ...data,
+          amount: parseFloat(data.amount),
+          description: data.description.trim(),
+          date: format(data.date, 'yyyy-MM-dd'),
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error(`Server error: ${response.status}`);
+      }
+
+      // Refresh data
+      await Promise.all([
+        fetchDashboardData(),
+        fetchSixMonthTrend(),
+        fetchTransactions(),
+        fetchBudgetAnalysis()
+      ]);
+      
+      addToast('Transaction updated successfully!', 'success');
+      return true; // Indicate success
+    } catch (error) {
+      console.error('Error updating transaction:', error);
+      addToast('Failed to update transaction. Please check your connection and try again.', 'error');
+      return false; // Indicate failure
+    } finally {
+      setLoading('editTransaction', false);
+    }
+  };
+
+  // Delete transaction with confirmation
   const deleteTransaction = async (id) => {
-    if (!confirm('Are you sure you want to delete this transaction?')) return;
+    setLoadingStates(prev => ({
+      ...prev,
+      deleteTransaction: { ...prev.deleteTransaction, [id]: true }
+    }));
     
     try {
       const response = await fetch(`${API_BASE}/transactions/${id}/`, {
         method: 'DELETE',
       });
 
-      if (response.ok) {
-        await Promise.all([
-          fetchDashboardData(),
-          fetchSixMonthTrend(),
-          fetchTransactions(),
-          fetchBudgetAnalysis()
-        ]);
+      if (!response.ok && response.status !== 204) {
+        throw new Error(`Server error: ${response.status}`);
       }
+
+      await Promise.all([
+        fetchDashboardData(),
+        fetchSixMonthTrend(),
+        fetchTransactions(),
+        fetchBudgetAnalysis()
+      ]);
+      
+      addToast('Transaction deleted successfully!', 'success');
     } catch (error) {
       console.error('Error deleting transaction:', error);
+      addToast('Failed to delete transaction. Please try again.', 'error');
+    } finally {
+      setLoadingStates(prev => ({
+        ...prev,
+        deleteTransaction: { ...prev.deleteTransaction, [id]: false }
+      }));
     }
   };
 
-  // Update budget
-  const handleBudgetSubmit = async () => {
-    const income = parseFloat(budgetInput);
+  // Update budget with validation
+  const handleBudgetSubmit = async (data) => {
+    const income = parseFloat(data.monthly_income);
     if (!income || income <= 0) {
-      alert('Please enter a valid monthly income');
+      addToast('Please enter a valid monthly income greater than 0', 'warning');
       return;
     }
 
+    setLoading('updateBudget', true);
     try {
       const response = await fetch(`${API_BASE}/budget/update_income/`, {
         method: 'POST',
@@ -290,14 +516,19 @@ const PersonalFinanceTracker = () => {
         }),
       });
 
-      if (response.ok) {
-        const data = await response.json();
-        setBudgetData(data);
-        fetchBudgetAnalysis();
-        alert('Budget updated successfully!');
+      if (!response.ok) {
+        throw new Error(`Server error: ${response.status}`);
       }
+
+      const newBudgetData = await response.json();
+      setBudgetData(newBudgetData);
+      await fetchBudgetAnalysis();
+      addToast('Budget updated successfully!', 'success');
     } catch (error) {
       console.error('Error updating budget:', error);
+      addToast('Failed to update budget. Please try again.', 'error');
+    } finally {
+      setLoading('updateBudget', false);
     }
   };
 
@@ -317,6 +548,24 @@ const PersonalFinanceTracker = () => {
       if (net > 0) return '#eab308'; // Yellow
       return '#ef4444'; // Red
     };
+
+    if (loadingStates.dashboard) {
+      return (
+        <div style={{ 
+          backgroundColor: '#1a1a1a', 
+          minHeight: '100vh', 
+          padding: '24px',
+          display: 'flex',
+          justifyContent: 'center',
+          alignItems: 'center'
+        }}>
+          <div style={{ textAlign: 'center', color: '#9ca3af' }}>
+            <LoadingSpinner size={40} />
+            <p style={{ marginTop: '16px' }}>Loading dashboard data...</p>
+          </div>
+        </div>
+      );
+    }
 
     return (
       <div style={{ backgroundColor: '#1a1a1a', minHeight: '100vh', padding: '24px' }}>
@@ -365,13 +614,13 @@ const PersonalFinanceTracker = () => {
             {incomeBreakdown.length > 0 ? (
               <>
                 <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '200px' }}>
-                  <div style={{ position: 'relative' }}>
-                    <ResponsiveContainer width={180} height={180}>
+                  <div style={{ position: 'relative', width: 180, height: 180 }}>
+                    <ResponsiveContainer width="100%" height="100%">
                       <PieChart>
                         <Pie
                           data={incomeBreakdown}
-                          cx={90}
-                          cy={90}
+                          cx="50%"
+                          cy="50%"
                           innerRadius={60}
                           outerRadius={80}
                           paddingAngle={2}
@@ -434,13 +683,13 @@ const PersonalFinanceTracker = () => {
             {expenseBreakdown.length > 0 ? (
               <>
                 <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '200px' }}>
-                  <div style={{ position: 'relative' }}>
-                    <ResponsiveContainer width={180} height={180}>
+                  <div style={{ position: 'relative', width: 180, height: 180 }}>
+                    <ResponsiveContainer width="100%" height="100%">
                       <PieChart>
                         <Pie
                           data={expenseBreakdown}
-                          cx={90}
-                          cy={90}
+                          cx="50%"
+                          cy="50%"
                           innerRadius={60}
                           outerRadius={80}
                           paddingAngle={2}
@@ -503,34 +752,20 @@ const PersonalFinanceTracker = () => {
               <h3 style={{ color: '#e5e7eb', fontSize: '16px', fontWeight: '500' }}>Total Savings</h3>
             </div>
             <div style={{ display: 'flex', gap: '8px' }}>
-              <button 
+              <Button 
+                variant={quarterFilter === 'all' ? 'secondary' : 'ghost'}
                 onClick={() => setQuarterFilter('all')}
-                style={{ 
-                  padding: '6px 12px', 
-                  borderRadius: '6px',
-                  border: 'none',
-                  fontSize: '14px',
-                  cursor: 'pointer',
-                  backgroundColor: quarterFilter === 'all' ? '#4b5563' : '#374151',
-                  color: '#e5e7eb'
-                }}>
+              >
                 All Months
-              </button>
+              </Button>
               {['Q1', 'Q2', 'Q3', 'Q4'].map(q => (
-                <button 
+                <Button 
                   key={q}
+                  variant={quarterFilter === q ? 'secondary' : 'ghost'}
                   onClick={() => setQuarterFilter(q)}
-                  style={{ 
-                    padding: '6px 12px', 
-                    borderRadius: '6px',
-                    border: 'none',
-                    fontSize: '14px',
-                    cursor: 'pointer',
-                    backgroundColor: quarterFilter === q ? '#4b5563' : '#374151',
-                    color: '#e5e7eb'
-                  }}>
+                >
                   {q}
-                </button>
+                </Button>
               ))}
             </div>
           </div>
@@ -573,198 +808,614 @@ const PersonalFinanceTracker = () => {
   };
 
   // Transactions Component
-  const Transactions = () => (
-    <div style={{ backgroundColor: '#1a1a1a', minHeight: '100vh', padding: '24px' }}>
-      {/* Add Transaction Form */}
-      <div style={{ backgroundColor: '#2a2a2a', borderRadius: '12px', padding: '24px', marginBottom: '24px', border: '1px solid #3a3a3a' }}>
-        <h3 style={{ color: '#e5e7eb', fontSize: '18px', fontWeight: '600', marginBottom: '16px' }}>Add New Transaction</h3>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: '12px' }}>
-          <select
-            defaultValue="expense"
-            onChange={(e) => {
-              typeRef.current = e.target.value;
-              categoryRef.current = e.target.value === 'income' ? 'salary' : 'food';
-              document.getElementById('category-select').value = categoryRef.current;
-            }}
-            style={{ 
-              padding: '10px',
-              borderRadius: '6px',
-              backgroundColor: '#1a1a1a',
-              border: '1px solid #3a3a3a',
-              color: '#e5e7eb'
-            }}>
-            <option value="expense">Expense</option>
-            <option value="income">Income</option>
-          </select>
-          
-          <select
-            id="category-select"
-            defaultValue="food"
-            onChange={(e) => categoryRef.current = e.target.value}
-            style={{ 
-              padding: '10px',
-              borderRadius: '6px',
-              backgroundColor: '#1a1a1a',
-              border: '1px solid #3a3a3a',
-              color: '#e5e7eb'
-            }}>
-            {expenseCategories.map(cat => (
-              <option key={cat} value={cat}>
-                {cat.charAt(0).toUpperCase() + cat.slice(1)}
-              </option>
-            ))}
-          </select>
-          
-          <input
-            id="amount-input"
-            type="number"
-            placeholder="Amount"
-            onChange={(e) => amountRef.current = e.target.value}
-            style={{ 
-              padding: '10px',
-              borderRadius: '6px',
-              backgroundColor: '#1a1a1a',
-              border: '1px solid #3a3a3a',
-              color: '#e5e7eb'
-            }}
-            min="0"
-            step="0.01"
-          />
-          
-          <input
-            type="date"
-            defaultValue={new Date().toISOString().split('T')[0]}
-            onChange={(e) => dateRef.current = e.target.value}
-            style={{ 
-              padding: '10px',
-              borderRadius: '6px',
-              backgroundColor: '#1a1a1a',
-              border: '1px solid #3a3a3a',
-              color: '#e5e7eb'
-            }}
-          />
-          
-          <button
-            onClick={addTransaction}
-            disabled={loading}
-            style={{ 
-              padding: '10px',
-              borderRadius: '6px',
-              backgroundColor: '#3b82f6',
-              color: 'white',
-              border: 'none',
-              cursor: loading ? 'not-allowed' : 'pointer',
-              opacity: loading ? 0.5 : 1,
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center'
-            }}>
-            {loading ? 'Adding...' : (
-              <>
-                <Plus style={{ width: '16px', height: '16px', marginRight: '4px' }} />
-                Add
-              </>
-            )}
-          </button>
-        </div>
-        
-        <input
-          id="description-input"
-          type="text"
-          placeholder="Description (e.g., Grocery shopping, Salary payment)"
-          onChange={(e) => descriptionRef.current = e.target.value}
-          style={{ 
-            width: '100%',
-            padding: '10px',
-            marginTop: '12px',
-            borderRadius: '6px',
-            backgroundColor: '#1a1a1a',
-            border: '1px solid #3a3a3a',
-            color: '#e5e7eb'
-          }}
-        />
-      </div>
+  const Transactions = () => {
+    const transactionForm = useForm({
+      resolver: zodResolver(transactionSchema),
+      defaultValues: {
+        type: 'expense',
+        category: 'food',
+        amount: '',
+        description: '',
+        date: new Date(),
+      },
+    });
 
-      {/* Transactions List */}
-      <div style={{ backgroundColor: '#2a2a2a', borderRadius: '12px', padding: '24px', border: '1px solid #3a3a3a' }}>
-        <h3 style={{ color: '#e5e7eb', fontSize: '18px', fontWeight: '600', marginBottom: '16px' }}>Recent Transactions</h3>
-        <div style={{ overflowX: 'auto' }}>
-          <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-            <thead>
-              <tr style={{ borderBottom: '1px solid #3a3a3a' }}>
-                <th style={{ textAlign: 'left', padding: '12px', color: '#9ca3af', fontSize: '14px' }}>Date</th>
-                <th style={{ textAlign: 'left', padding: '12px', color: '#9ca3af', fontSize: '14px' }}>Type</th>
-                <th style={{ textAlign: 'left', padding: '12px', color: '#9ca3af', fontSize: '14px' }}>Category</th>
-                <th style={{ textAlign: 'left', padding: '12px', color: '#9ca3af', fontSize: '14px' }}>Description</th>
-                <th style={{ textAlign: 'right', padding: '12px', color: '#9ca3af', fontSize: '14px' }}>Amount</th>
-                <th style={{ textAlign: 'center', padding: '12px', color: '#9ca3af', fontSize: '14px' }}>Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {transactions.slice(0, 20).map(transaction => (
-                <tr key={transaction.id} style={{ borderBottom: '1px solid #3a3a3a' }}>
-                  <td style={{ padding: '12px', color: '#e5e7eb', fontSize: '14px' }}>
-                    {new Date(transaction.date).toLocaleDateString()}
-                  </td>
-                  <td style={{ padding: '12px' }}>
-                    <span style={{ 
-                      padding: '4px 8px',
-                      borderRadius: '4px',
-                      fontSize: '12px',
-                      backgroundColor: transaction.type === 'income' ? '#10b981' : '#ef4444',
-                      color: 'white'
-                    }}>
-                      {transaction.type}
-                    </span>
-                  </td>
-                  <td style={{ padding: '12px', color: '#e5e7eb', fontSize: '14px', textTransform: 'capitalize' }}>
-                    {transaction.category}
-                  </td>
-                  <td style={{ padding: '12px', color: '#e5e7eb', fontSize: '14px' }}>
-                    {transaction.description}
-                  </td>
-                  <td style={{ 
-                    padding: '12px', 
-                    textAlign: 'right', 
-                    fontSize: '14px',
-                    fontWeight: '600',
-                    color: transaction.type === 'income' ? '#10b981' : '#ef4444'
-                  }}>
-                    ${parseFloat(transaction.amount).toLocaleString()}
-                  </td>
-                  <td style={{ padding: '12px', textAlign: 'center' }}>
-                    <button
-                      onClick={() => deleteTransaction(transaction.id)}
-                      style={{ 
-                        backgroundColor: 'transparent',
-                        border: 'none',
-                        cursor: 'pointer',
-                        color: '#ef4444'
-                      }}>
-                      <Trash2 style={{ width: '16px', height: '16px' }} />
-                    </button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-          {transactions.length === 0 && (
-            <div style={{ 
-              textAlign: 'center', 
-              padding: '48px', 
-              color: '#6b7280',
-              fontSize: '14px'
-            }}>
-              No transactions yet. Add your first transaction above!
+    const onSubmit = async (data) => {
+      const success = await addTransaction(data);
+      if (success) {
+        transactionForm.reset({
+          type: 'expense',
+          category: 'food',
+          amount: '',
+          description: '',
+          date: new Date(),
+        });
+      }
+    };
+
+    const transactionType = transactionForm.watch('type');
+    const currentCategories = transactionType === 'income' ? incomeCategories : expenseCategories;
+
+    useEffect(() => {
+      transactionForm.setValue('category', currentCategories[0]);
+    }, [transactionType, currentCategories, transactionForm]);
+
+    return (
+      <div style={{ backgroundColor: '#1a1a1a', minHeight: '100vh', padding: '24px' }}>
+        {/* Add Transaction Form */}
+        <div style={{ 
+          backgroundColor: '#2a2a2a', 
+          borderRadius: '12px', 
+          padding: '20px', 
+          marginBottom: '24px', 
+          border: '1px solid #3a3a3a'
+        }}>
+          <h3 style={{ color: '#e5e7eb', fontSize: '18px', fontWeight: '600', marginBottom: '16px', display: 'flex', alignItems: 'center' }}>
+            <Plus style={{ width: '20px', height: '20px', color: '#3b82f6', marginRight: '8px' }} />
+            Add New Transaction
+          </h3>
+          <Form {...transactionForm}>
+            <form onSubmit={transactionForm.handleSubmit(onSubmit)} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: '16px', alignItems: 'start' }}>
+                <FormField
+                  control={transactionForm.control}
+                  name="type"
+                  render={({ field }) => (
+                    <FormItem>
+                      <Select onValueChange={field.onChange} defaultValue={field.value}>
+                        <FormControl>
+                          <SelectTrigger style={{ 
+                            backgroundColor: '#1a1a1a', 
+                            borderColor: '#3a3a3a', 
+                            color: '#e5e7eb',
+                            height: '38px' 
+                          }}>
+                            <SelectValue placeholder="Type" />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent style={{ backgroundColor: '#2a2a2a', borderColor: '#3a3a3a', color: '#e5e7eb' }}>
+                          <SelectItem value="expense">Expense</SelectItem>
+                          <SelectItem value="income">Income</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      <FormMessage style={{ color: '#ef4444', fontSize: '12px', marginTop: '4px' }} />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={transactionForm.control}
+                  name="category"
+                  render={({ field }) => (
+                    <FormItem>
+                      <Select onValueChange={field.onChange} value={field.value}>
+                        <FormControl>
+                          <SelectTrigger style={{ 
+                            backgroundColor: '#1a1a1a', 
+                            borderColor: '#3a3a3a', 
+                            color: '#e5e7eb',
+                            height: '38px'
+                          }}>
+                            <SelectValue placeholder="Category" />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent style={{ backgroundColor: '#2a2a2a', borderColor: '#3a3a3a', color: '#e5e7eb' }}>
+                          {currentCategories.map(cat => (
+                            <SelectItem key={cat} value={cat} style={{ textTransform: 'capitalize' }}>
+                              {cat.charAt(0).toUpperCase() + cat.slice(1)}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <FormMessage style={{ color: '#ef4444', fontSize: '12px', marginTop: '4px' }} />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={transactionForm.control}
+                  name="amount"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormControl>
+                        <Input 
+                          type="number" 
+                          placeholder="Amount" 
+                          style={{ 
+                            backgroundColor: '#1a1a1a', 
+                            borderColor: '#3a3a3a', 
+                            color: '#e5e7eb',
+                            height: '38px'
+                          }} 
+                          {...field} 
+                        />
+                      </FormControl>
+                      <FormMessage style={{ color: '#ef4444', fontSize: '12px', marginTop: '4px' }} />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={transactionForm.control}
+                  name="date"
+                  render={({ field }) => (
+                    <FormItem>
+                      <Popover>
+                        <PopoverTrigger asChild>
+                          <FormControl>
+                            <Button
+                              variant={"outline"}
+                              style={{
+                                backgroundColor: '#1a1a1a', 
+                                borderColor: '#3a3a3a', 
+                                color: field.value ? '#e5e7eb' : '#6b7280',
+                                width: '100%',
+                                height: '38px',
+                                display: 'flex',
+                                justifyContent: 'flex-start',
+                                textAlign: 'left'
+                              }}
+                            >
+                              <CalendarIcon style={{ width: '16px', height: '16px', marginRight: '8px', color: '#3b82f6' }} />
+                              {field.value ? (
+                                format(field.value, "PPP")
+                              ) : (
+                                <span>Pick a date</span>
+                              )}
+                            </Button>
+                          </FormControl>
+                        </PopoverTrigger>
+                        <PopoverContent style={{ 
+                          width: 'auto', 
+                          padding: 0, 
+                          backgroundColor: '#2a2a2a', 
+                          borderColor: '#3a3a3a' 
+                        }} align="start">
+                          <Calendar
+                            mode="single"
+                            selected={field.value}
+                            onSelect={field.onChange}
+                            initialFocus
+                          />
+                        </PopoverContent>
+                      </Popover>
+                      <FormMessage style={{ color: '#ef4444', fontSize: '12px', marginTop: '4px' }} />
+                    </FormItem>
+                  )}
+                />
+                <Button 
+                  type="submit" 
+                  disabled={loadingStates.addTransaction} 
+                  style={{
+                    backgroundColor: '#3b82f6',
+                    color: 'white',
+                    border: 'none',
+                    padding: '0 16px',
+                    height: '38px',
+                    borderRadius: '6px',
+                    cursor: loadingStates.addTransaction ? 'not-allowed' : 'pointer',
+                    opacity: loadingStates.addTransaction ? 0.7 : 1,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: '8px',
+                    width: '100%'
+                  }}
+                >
+                  {loadingStates.addTransaction ? (
+                    <>
+                      <LoadingSpinner size={16} />
+                      <span>Adding...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Plus style={{ width: '16px', height: '16px' }} />
+                      Add
+                    </>
+                  )}
+                </Button>
+              </div>
+              <FormField
+                control={transactionForm.control}
+                name="description"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormControl>
+                      <Input 
+                        placeholder="Description (e.g., Grocery shopping, Salary payment)" 
+                        style={{ 
+                          backgroundColor: '#1a1a1a', 
+                          borderColor: '#3a3a3a', 
+                          color: '#e5e7eb',
+                          height: '38px'
+                        }} 
+                        {...field} 
+                      />
+                    </FormControl>
+                    <FormMessage style={{ color: '#ef4444', fontSize: '12px', marginTop: '4px' }} />
+                  </FormItem>
+                )}
+              />
+            </form>
+          </Form>
+        </div>
+
+        {/* Transactions List */}
+        <div className="bg-[#2a2a2a] rounded-xl p-6 border border-[#3a3a3a]">
+          <div className="flex justify-between items-center mb-6">
+            <h3 className="text-gray-200 text-lg font-semibold flex items-center">
+              <DollarSign className="h-5 w-5 mr-2 text-blue-400" />
+              Recent Transactions
+            </h3>
+            <div className="text-sm text-gray-400">
+              {transactions.length > 0 ? `Showing ${Math.min(20, transactions.length)} of ${transactions.length} transactions` : 'No transactions'}
+            </div>
+          </div>
+          {loadingStates.transactions ? (
+            <div className="text-center py-12 text-gray-400">
+              <LoadingSpinner size={30} />
+              <p className="mt-4">Loading transactions...</p>
+            </div>
+          ) : (
+            <div className="overflow-x-auto rounded-md">
+              <table className="w-full border-collapse">
+                <thead className="bg-[#1a1a1a]">
+                  <tr className="border-b border-[#3a3a3a]">
+                    <th className="text-left py-3 px-4 text-gray-400 text-sm font-medium">Date</th>
+                    <th className="text-left py-3 px-4 text-gray-400 text-sm font-medium">Type</th>
+                    <th className="text-left py-3 px-4 text-gray-400 text-sm font-medium">Category</th>
+                    <th className="text-left py-3 px-4 text-gray-400 text-sm font-medium">Description</th>
+                    <th className="text-right py-3 px-4 text-gray-400 text-sm font-medium">Amount</th>
+                    <th className="text-center py-3 px-4 text-gray-400 text-sm font-medium">Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {transactions.slice(0, 20).map(transaction => (
+                    <tr key={transaction.id} className="border-b border-[#3a3a3a] hover:bg-[#222]">
+                      <td className="py-3 px-4 text-gray-200 text-sm">
+                        {new Date(transaction.date).toLocaleDateString()}
+                      </td>
+                      <td className="py-3 px-4">
+                        <span className={`px-2 py-1 rounded text-xs font-medium ${
+                          transaction.type === 'income' ? 'bg-green-900 text-green-300' : 'bg-red-900 text-red-300'
+                        }`}>
+                          {transaction.type}
+                        </span>
+                      </td>
+                      <td className="py-3 px-4 text-gray-200 text-sm capitalize">
+                        {transaction.category}
+                      </td>
+                      <td className="py-3 px-4 text-gray-200 text-sm">
+                        {transaction.description}
+                      </td>
+                      <td className={`py-3 px-4 text-right text-sm font-semibold ${
+                        transaction.type === 'income' ? 'text-green-400' : 'text-red-400'
+                      }`}>
+                        ${parseFloat(transaction.amount).toLocaleString()}
+                      </td>
+                      <td className="py-3 px-4 text-center">
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
+                          <EditTransactionDialog transaction={transaction} />
+                          <button 
+                            onClick={() => {
+                              if (confirm(`Are you sure you want to delete this transaction: ${transaction.description}? This action cannot be undone.`)) {
+                                deleteTransaction(transaction.id);
+                              }
+                            }}
+                            style={{
+                              backgroundColor: 'transparent',
+                              border: 'none',
+                              cursor: loadingStates.deleteTransaction[transaction.id] ? 'not-allowed' : 'pointer',
+                              padding: '6px',
+                              borderRadius: '4px',
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              justifyContent: 'center'
+                            }}
+                            disabled={loadingStates.deleteTransaction[transaction.id]}
+                            onMouseOver={(e) => !loadingStates.deleteTransaction[transaction.id] && (e.currentTarget.style.backgroundColor = '#333')}
+                            onMouseOut={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
+                          >
+                            {loadingStates.deleteTransaction[transaction.id] ? (
+                              <LoadingSpinner size={16} />
+                            ) : (
+                              <Trash2 style={{ width: '16px', height: '16px', color: '#ef4444' }} />
+                            )}
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              {transactions.length === 0 && (
+                <div className="text-center py-12 text-gray-400 text-sm bg-[#1a1a1a] rounded-md mt-4">
+                  <div className="flex flex-col items-center">
+                    <DollarSign className="h-12 w-12 text-gray-600 mb-3 opacity-50" />
+                    <p>No transactions yet. Add your first transaction above!</p>
+                  </div>
+                </div>
+              )}
             </div>
           )}
         </div>
       </div>
-    </div>
-  );
+    );
+  }
+
+  const EditTransactionDialog = ({ transaction }) => {
+    const [open, setOpen] = useState(false);
+    const transactionForm = useForm({
+      resolver: zodResolver(transactionSchema),
+      defaultValues: {
+        type: transaction.type,
+        category: transaction.category,
+        amount: transaction.amount.toString(),
+        description: transaction.description,
+        date: new Date(transaction.date),
+      },
+    });
+
+    const onSubmit = async (data) => {
+      console.log("Submitting edited transaction:", { ...data, id: transaction.id });
+      const success = await editTransaction({ ...data, id: transaction.id });
+      if (success) {
+        setOpen(false);
+      }
+    };
+
+    const transactionType = transactionForm.watch('type');
+    const currentCategories = transactionType === 'income' ? incomeCategories : expenseCategories;
+
+    // Reset form when dialog opens
+    useEffect(() => {
+      if (open) {
+        console.log("Dialog opened, resetting form with data:", transaction);
+        transactionForm.reset({
+          type: transaction.type,
+          category: transaction.category,
+          amount: transaction.amount.toString(),
+          description: transaction.description,
+          date: new Date(transaction.date),
+        });
+      }
+    }, [open, transaction, transactionForm]);
+    
+    // Update category when type changes
+    useEffect(() => {
+      const currentCategory = transactionForm.getValues("category");
+      if (!currentCategories.includes(currentCategory)) {
+        transactionForm.setValue('category', currentCategories[0]);
+      }
+    }, [transactionType, currentCategories, transactionForm]);
+
+    return (
+      <Dialog open={open} onOpenChange={setOpen}>
+        <DialogTrigger asChild>
+          <button 
+            style={{
+              backgroundColor: 'transparent',
+              border: 'none',
+              cursor: 'pointer',
+              padding: '6px',
+              borderRadius: '4px',
+              display: 'inline-flex',
+              alignItems: 'center',
+              justifyContent: 'center'
+            }} 
+            onMouseOver={(e) => e.currentTarget.style.backgroundColor = '#333'}
+            onMouseOut={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
+          >
+            <Edit style={{ width: '16px', height: '16px', color: '#3b82f6' }} />
+          </button>
+        </DialogTrigger>
+        <DialogContent style={{
+          backgroundColor: '#2a2a2a',
+          border: '1px solid #3a3a3a', 
+          color: 'white',
+          padding: '24px',
+          borderRadius: '8px',
+          maxWidth: '500px',
+          width: '95vw',
+          margin: '0 auto'
+        }}>
+          <DialogHeader>
+            <DialogTitle style={{ color: 'white', fontSize: '18px' }}>Edit Transaction</DialogTitle>
+            <DialogDescription style={{ color: '#9ca3af' }}>
+              Update the details of your transaction.
+            </DialogDescription>
+          </DialogHeader>
+          <div style={{ margin: '20px 0' }}>
+            <Form {...transactionForm}>
+              <form onSubmit={transactionForm.handleSubmit(onSubmit)} className="space-y-4">
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '16px' }}>
+                  <FormField
+                    control={transactionForm.control}
+                    name="type"
+                    render={({ field }) => (
+                      <FormItem>
+                        <Select onValueChange={field.onChange} value={field.value}>
+                          <FormControl>
+                            <SelectTrigger style={{ backgroundColor: '#1a1a1a', borderColor: '#3a3a3a', color: '#e5e7eb' }}>
+                              <SelectValue placeholder="Type" />
+                            </SelectTrigger>
+                          </FormControl>
+                          <SelectContent style={{ backgroundColor: '#2a2a2a', borderColor: '#3a3a3a', color: '#e5e7eb' }}>
+                            <SelectItem value="expense">Expense</SelectItem>
+                            <SelectItem value="income">Income</SelectItem>
+                          </SelectContent>
+                        </Select>
+                        <FormMessage style={{ color: '#ef4444', fontSize: '12px', marginTop: '4px' }} />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={transactionForm.control}
+                    name="category"
+                    render={({ field }) => (
+                      <FormItem>
+                        <Select onValueChange={field.onChange} value={field.value}>
+                          <FormControl>
+                            <SelectTrigger style={{ backgroundColor: '#1a1a1a', borderColor: '#3a3a3a', color: '#e5e7eb' }}>
+                              <SelectValue placeholder="Category" />
+                            </SelectTrigger>
+                          </FormControl>
+                          <SelectContent style={{ backgroundColor: '#2a2a2a', borderColor: '#3a3a3a', color: '#e5e7eb' }}>
+                            {currentCategories.map(cat => (
+                              <SelectItem key={cat} value={cat} style={{ textTransform: 'capitalize' }}>
+                                {cat.charAt(0).toUpperCase() + cat.slice(1)}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        <FormMessage style={{ color: '#ef4444', fontSize: '12px', marginTop: '4px' }} />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={transactionForm.control}
+                    name="amount"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormControl>
+                          <Input 
+                            type="number" 
+                            placeholder="Amount" 
+                            style={{ backgroundColor: '#1a1a1a', borderColor: '#3a3a3a', color: '#e5e7eb' }} 
+                            {...field} 
+                          />
+                        </FormControl>
+                        <FormMessage style={{ color: '#ef4444', fontSize: '12px', marginTop: '4px' }} />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={transactionForm.control}
+                    name="date"
+                    render={({ field }) => (
+                      <FormItem>
+                        <Popover>
+                          <PopoverTrigger asChild>
+                            <FormControl>
+                              <Button
+                                variant={"outline"}
+                                style={{ 
+                                  backgroundColor: '#1a1a1a', 
+                                  borderColor: '#3a3a3a', 
+                                  color: field.value ? '#e5e7eb' : '#6b7280',
+                                  width: '100%',
+                                  display: 'flex',
+                                  justifyContent: 'flex-start',
+                                  textAlign: 'left'
+                                }}
+                              >
+                                <CalendarIcon style={{ width: '16px', height: '16px', marginRight: '8px' }} />
+                                {field.value ? (
+                                  format(field.value, "PPP")
+                                ) : (
+                                  <span>Pick a date</span>
+                                )}
+                              </Button>
+                            </FormControl>
+                          </PopoverTrigger>
+                          <PopoverContent style={{ 
+                            width: 'auto', 
+                            padding: 0, 
+                            backgroundColor: '#2a2a2a', 
+                            borderColor: '#3a3a3a' 
+                          }} align="start">
+                            <Calendar
+                              mode="single"
+                              selected={field.value}
+                              onSelect={field.onChange}
+                              initialFocus
+                              style={{ backgroundColor: '#2a2a2a' }}
+                            />
+                          </PopoverContent>
+                        </Popover>
+                        <FormMessage style={{ color: '#ef4444', fontSize: '12px', marginTop: '4px' }} />
+                      </FormItem>
+                    )}
+                  />
+                </div>
+                <FormField
+                  control={transactionForm.control}
+                  name="description"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormControl>
+                        <Input 
+                          placeholder="Description" 
+                          style={{ backgroundColor: '#1a1a1a', borderColor: '#3a3a3a', color: '#e5e7eb' }} 
+                          {...field} 
+                        />
+                      </FormControl>
+                      <FormMessage style={{ color: '#ef4444', fontSize: '12px', marginTop: '4px' }} />
+                    </FormItem>
+                  )}
+                />
+                <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px', marginTop: '20px' }}>
+                  <Button 
+                    type="button" 
+                    onClick={() => setOpen(false)}
+                    style={{
+                      backgroundColor: '#3a3a3a',
+                      color: 'white',
+                      border: 'none',
+                      padding: '8px 16px',
+                      borderRadius: '6px',
+                      cursor: 'pointer'
+                    }}
+                  >
+                    Cancel
+                  </Button>
+                  <Button 
+                    type="submit" 
+                    disabled={loadingStates.editTransaction}
+                    style={{
+                      backgroundColor: '#3b82f6',
+                      color: 'white',
+                      border: 'none',
+                      padding: '8px 16px',
+                      borderRadius: '6px',
+                      cursor: loadingStates.editTransaction ? 'not-allowed' : 'pointer',
+                      opacity: loadingStates.editTransaction ? 0.7 : 1
+                    }}
+                  >
+                    {loadingStates.editTransaction ? (
+                      <>
+                        <LoadingSpinner size={16} />
+                        <span style={{ marginLeft: '8px' }}>Saving...</span>
+                      </>
+                    ) : (
+                      'Save Changes'
+                    )}
+                  </Button>
+                </div>
+              </form>
+            </Form>
+          </div>
+        </DialogContent>
+      </Dialog>
+    );
+  };
 
   // Smart Budgeting Component  
   const SmartBudgeting = () => {
+    const budgetForm = useForm({
+      resolver: zodResolver(budgetSchema),
+      defaultValues: {
+        monthly_income: budgetData.monthly_income || '',
+      },
+    });
+
+    useEffect(() => {
+      if (budgetData.monthly_income) {
+        budgetForm.reset({ monthly_income: budgetData.monthly_income });
+      }
+    }, [budgetData.monthly_income, budgetForm]);
+
+    const onSubmit = (data) => {
+      handleBudgetSubmit(data);
+    };
+
     const budgetComparison = budgetAnalysis ? [
       {
         category: 'Needs (50%)',
@@ -797,63 +1448,62 @@ const PersonalFinanceTracker = () => {
             Follow the 50/30/20 rule: 50% for needs, 30% for wants, 20% for savings and investments.
           </p>
           
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 2fr', gap: '24px' }}>
-            <div>
-              <label style={{ display: 'block', color: '#9ca3af', fontSize: '14px', marginBottom: '8px' }}>
-                Monthly Income
-              </label>
-              <div style={{ display: 'flex', gap: '8px' }}>
-                <input
-                  type="number"
-                  value={budgetInput}
-                  onChange={(e) => setBudgetInput(e.target.value)}
-                  style={{ 
-                    flex: 1,
-                    padding: '10px',
-                    borderRadius: '6px',
-                    backgroundColor: '#1a1a1a',
-                    border: '1px solid #3a3a3a',
-                    color: '#e5e7eb',
-                    fontSize: '16px'
-                  }}
-                  placeholder="Enter monthly income"
-                />
-                <button
-                  onClick={handleBudgetSubmit}
-                  style={{ 
-                    padding: '10px 20px',
-                    borderRadius: '6px',
-                    backgroundColor: '#3b82f6',
-                    color: 'white',
-                    border: 'none',
-                    cursor: 'pointer'
-                  }}>
-                  Update
-                </button>
+          <Form {...budgetForm}>
+            <form onSubmit={budgetForm.handleSubmit(onSubmit)}>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 2fr', alignItems: 'start', gap: '24px' }}>
+                <div>
+                  <label style={{ display: 'block', color: '#9ca3af', fontSize: '14px', marginBottom: '8px' }}>
+                    Monthly Income
+                  </label>
+                  <div style={{ display: 'flex', gap: '8px', alignItems: 'start' }}>
+                    <FormField
+                      control={budgetForm.control}
+                      name="monthly_income"
+                      render={({ field }) => (
+                        <FormItem className="flex-1">
+                          <FormControl>
+                            <Input type="number" placeholder="Enter monthly income" {...field} />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    <Button type="submit" disabled={loadingStates.updateBudget}>
+                      {loadingStates.updateBudget ? (
+                        <>
+                          <LoadingSpinner size={16} />
+                          Updating...
+                        </>
+                      ) : (
+                        'Update'
+                      )}
+                    </Button>
+                  </div>
+                </div>
+                
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', paddingTop: '30px' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <span style={{ color: '#9ca3af', fontSize: '14px' }}>Needs (50%)</span>
+                    <span style={{ color: '#3b82f6', fontSize: '18px', fontWeight: '600' }}>
+                      ${budgetData.needs_budget?.toLocaleString() || 0}
+                    </span>
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <span style={{ color: '#9ca3af', fontSize: '14px' }}>Wants (30%)</span>
+                    <span style={{ color: '#10b981', fontSize: '18px', fontWeight: '600' }}>
+                      ${budgetData.wants_budget?.toLocaleString() || 0}
+                    </span>
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <span style={{ color: '#9ca3af', fontSize: '14px' }}>Savings (20%)</span>
+                    <span style={{ color: '#8b5cf6', fontSize: '18px', fontWeight: '600' }}>
+                      ${budgetData.savings_goal?.toLocaleString() || 0}
+                    </span>
+                  </div>
+                </div>
               </div>
-            </div>
-            
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <span style={{ color: '#9ca3af', fontSize: '14px' }}>Needs (50%)</span>
-                <span style={{ color: '#3b82f6', fontSize: '18px', fontWeight: '600' }}>
-                  ${budgetData.needs_budget?.toLocaleString() || 0}
-                </span>
-              </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <span style={{ color: '#9ca3af', fontSize: '14px' }}>Wants (30%)</span>
-                <span style={{ color: '#10b981', fontSize: '18px', fontWeight: '600' }}>
-                  ${budgetData.wants_budget?.toLocaleString() || 0}
-                </span>
-              </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <span style={{ color: '#9ca3af', fontSize: '14px' }}>Savings (20%)</span>
-                <span style={{ color: '#8b5cf6', fontSize: '18px', fontWeight: '600' }}>
-                  ${budgetData.savings_goal?.toLocaleString() || 0}
-                </span>
-              </div>
-            </div>
-          </div>
+            </form>
+          </Form>
         </div>
 
         {/* Budget vs Actual */}
@@ -974,7 +1624,14 @@ const PersonalFinanceTracker = () => {
               </h1>
             </div>
             <div style={{ fontSize: '14px', color: '#6b7280' }}>
-              Connected to Django API • {transactions.length} transactions
+              {loadingStates.initialLoad ? (
+                <span style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <LoadingSpinner size={16} />
+                  Connecting to Django API...
+                </span>
+              ) : (
+                `Connected to Django API • ${transactions.length} transactions`
+              )}
             </div>
           </div>
         </div>
@@ -989,25 +1646,15 @@ const PersonalFinanceTracker = () => {
               { id: 'transactions', name: 'Transactions', icon: DollarSign },
               { id: 'budget', name: 'Smart Budget', icon: Target }
             ].map((tab) => (
-              <button
+              <Button
                 key={tab.id}
+                variant={activeTab === tab.id ? 'secondary' : 'ghost'}
                 onClick={() => setActiveTab(tab.id)}
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  padding: '16px 4px',
-                  background: 'none',
-                  border: 'none',
-                  borderBottom: activeTab === tab.id ? '2px solid #3b82f6' : '2px solid transparent',
-                  color: activeTab === tab.id ? '#3b82f6' : '#6b7280',
-                  fontSize: '14px',
-                  fontWeight: '500',
-                  cursor: 'pointer',
-                  transition: 'all 0.2s'
-                }}>
-                <tab.icon style={{ width: '16px', height: '16px', marginRight: '8px' }} />
+                className="flex items-center gap-2"
+              >
+                <tab.icon className="h-4 w-4" />
                 {tab.name}
-              </button>
+              </Button>
             ))}
           </nav>
         </div>
@@ -1015,10 +1662,37 @@ const PersonalFinanceTracker = () => {
 
       {/* Main Content */}
       <div style={{ maxWidth: '1400px', margin: '0 auto' }}>
-        {activeTab === 'dashboard' && <Dashboard />}
-        {activeTab === 'transactions' && <Transactions />}
-        {activeTab === 'budget' && <SmartBudgeting />}
+        {loadingStates.initialLoad ? (
+          <div style={{ 
+            minHeight: '60vh', 
+            display: 'flex', 
+            justifyContent: 'center', 
+            alignItems: 'center',
+            flexDirection: 'column'
+          }}>
+            <LoadingSpinner size={50} />
+            <p style={{ marginTop: '20px', color: '#9ca3af', fontSize: '16px' }}>
+              Loading your financial data...
+            </p>
+          </div>
+        ) : (
+          <>
+            {activeTab === 'dashboard' && <Dashboard />}
+            {activeTab === 'transactions' && <Transactions />}
+            {activeTab === 'budget' && <SmartBudgeting />}
+          </>
+        )}
       </div>
+
+      {/* Toast Notifications */}
+      {toasts.map(toast => (
+        <Toast
+          key={toast.id}
+          message={toast.message}
+          type={toast.type}
+          onClose={() => removeToast(toast.id)}
+        />
+      ))}
     </div>
   );
 };

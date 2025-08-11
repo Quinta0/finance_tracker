@@ -107,22 +107,23 @@ FINANCE_TRACKER/
 ## 🐛 Known Issues (TODO)
 
 ### Critical Bugs
-- [X] **Cursor jumping in input fields** - Form inputs lose focus/cursor position while typing
-- [ ] **Transaction form validation** - Better client-side validation needed
-- [ ] **Error handling** - Improve user feedback for API failures
-- [ ] **Loading states** - Add loading indicators for all API calls
+- [x] **Cursor jumping in input fields** - Form inputs lose focus/cursor position while typing
+- [x] **Transaction form validation** - Better client-side validation needed
+- [x] **Error handling** - Improve user feedback for API failures
+- [x] **Loading states** - Add loading indicators for all API calls
 
 ### UI/UX Improvements
 - [ ] **Responsive design** - Better mobile/tablet layout
 - [ ] **Form validation** - Real-time validation with error messages
-- [ ] **Confirmation dialogs** - Better delete confirmations
+- [x] **Confirmation dialogs** - Better delete confirmations
 - [ ] **Toast notifications** - Replace alerts with modern notifications
 - [ ] **Empty states** - Better messaging when no data exists
-- [ ] **Date picker** - Improve date selection UX
+- [x] **Date picker** - Improve date selection UX
 
 ### Features to Add
 - [ ] **Multiple budgets** - Support for different budget periods
 - [ ] **Categories management** - Custom expense/income categories
+- [x] **Edit transactions** - Edit feature inside the transactions page for editing a transaction
 - [ ] **Data export** - Export transactions to CSV/PDF
 - [ ] **Recurring transactions** - Monthly bills, salary automation
 - [ ] **Goals tracking** - Savings goals and progress
