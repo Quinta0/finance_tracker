@@ -38,13 +38,22 @@ import {
 } from "@/components/ui/dialog"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { format } from "date-fns";
 import { cn } from "@/lib/utils";
+import { Toaster } from "@/components/ui/sonner";
+import { toast } from "sonner";
+
+// Import our new components
+import EnhancedNavigation from "@/components/EnhancedNavigation";
+import CategoryManager from "@/components/CategoryManager";
+import BudgetPeriodManager from "@/components/BudgetPeriodManager";
+import RecurringTransactionManager from "@/components/RecurringTransactionManager";
 
 const transactionSchema = z.object({
   id: z.number().optional(),
   type: z.enum(['expense', 'income']),
-  category: z.string(),
+  category: z.number().positive({ message: "Please select a category" }),
   amount: z.coerce.number().positive({ message: "Amount must be greater than 0" }),
   description: z.string().min(3, { message: "Description must be at least 3 characters" }),
   date: z.date({
@@ -66,161 +75,16 @@ const goalSchema = z.object({
   description: z.string().optional(),
 });
 
-
-// Toast Notification Component
-const Toast = ({ message, type = 'info', onClose }) => {
-  const [isVisible, setIsVisible] = useState(true);
-
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      setIsVisible(false);
-      setTimeout(onClose, 300);
-    }, 4000);
-    return () => clearTimeout(timer);
-  }, [onClose]);
-
-  const bgColor = {
-    success: '#10b981',
-    error: '#ef4444',
-    warning: '#f59e0b',
-    info: '#3b82f6'
-  }[type];
-
-  const Icon = {
-    success: CheckCircle,
-    error: AlertCircle,
-    warning: AlertCircle,
-    info: Info
-  }[type];
-
-  return (
-    <div style={{
-      position: 'fixed',
-      bottom: '20px',
-      right: '20px',
-      backgroundColor: '#2a2a2a',
-      border: `1px solid ${bgColor}`,
-      borderRadius: '8px',
-      padding: '16px',
-      display: 'flex',
-      alignItems: 'center',
-      gap: '12px',
-      minWidth: '300px',
-      maxWidth: '500px',
-      boxShadow: '0 10px 40px rgba(0,0,0,0.5)',
-      opacity: isVisible ? 1 : 0,
-      transform: isVisible ? 'translateY(0)' : 'translateY(20px)',
-      transition: 'all 0.3s ease',
-      zIndex: 1000
-    }}>
-      <Icon style={{ width: '20px', height: '20px', color: bgColor, flexShrink: 0 }} />
-      <div style={{ flex: 1 }}>
-        <p style={{ color: '#e5e7eb', fontSize: '14px', margin: 0 }}>{message}</p>
-      </div>
-      <Button
-        variant="ghost"
-        size="icon"
-        onClick={() => {
-          setIsVisible(false);
-          setTimeout(onClose, 300);
-        }}
-      >
-        <X className="h-4 w-4" />
-      </Button>
-    </div>
-  );
-};
-
-// Loading Spinner Component
-const LoadingSpinner = ({ size = 20 }) => (
-  <Loader2 
-    style={{ 
-      width: `${size}px`, 
-      height: `${size}px`, 
-      animation: 'spin 1s linear infinite' 
-    }} 
-  />
-);
-
-// Add CSS for spinner animation
-const spinnerStyle = `
-  @keyframes spin {
-    from { transform: rotate(0deg); }
-    to { transform: rotate(360deg); }
-  }
-  
-  /* Enhanced UI styles */
-  .nav-button {
-    transition: all 0.2s ease-in-out;
-    position: relative;
-    overflow: hidden;
-  }
-  
-  .nav-button:hover {
-    transform: translateY(-1px);
-  }
-  
-  .nav-button.active::before {
-    content: '';
-    position: absolute;
-    bottom: -1px;
-    left: 0;
-    right: 0;
-    height: 2px;
-    background: linear-gradient(90deg, #3b82f6, #06b6d4);
-  }
-  
-  .stat-card {
-    transition: all 0.3s ease;
-    position: relative;
-    overflow: hidden;
-  }
-  
-  .stat-card:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 8px 25px rgba(59, 130, 246, 0.15);
-  }
-  
-  .stat-card::before {
-    content: '';
-    position: absolute;
-    top: 0;
-    left: 0;
-    right: 0;
-    height: 1px;
-    background: linear-gradient(90deg, transparent, rgba(59, 130, 246, 0.5), transparent);
-  }
-  
-  .ripple-button {
-    position: relative;
-    overflow: hidden;
-    transition: all 0.2s ease;
-  }
-  
-  .ripple-button:hover {
-    transform: scale(1.02);
-  }
-  
-  .ripple-button:active {
-    transform: scale(0.98);
-  }
-  
-  .chart-container {
-    transition: all 0.3s ease;
-  }
-  
-  .chart-container:hover {
-    transform: translateY(-1px);
-  }
-`;
-
 const PersonalFinanceTracker = () => {
   // API Base URL
-  const API_BASE = 'http://localhost:8000/api';
+  const API_BASE = 'http://localhost:8001/api';
   
   // State management
   const [activeTab, setActiveTab] = useState('dashboard');
   const [transactions, setTransactions] = useState([]);
+  const [categories, setCategories] = useState({ income: [], expense: [] });
+  const [budgetPeriods, setBudgetPeriods] = useState([]);
+  const [recurringTransactions, setRecurringTransactions] = useState([]);
   const [dashboardData, setDashboardData] = useState({
     monthly_income: 0,
     monthly_expenses: 0,
@@ -241,7 +105,7 @@ const PersonalFinanceTracker = () => {
   const [goals, setGoals] = useState([]);
   const [editingTransaction, setEditingTransaction] = useState(null);
   
-  // Loading states for different operations
+  // Loading states
   const [loadingStates, setLoadingStates] = useState({
     dashboard: false,
     transactions: false,
@@ -256,31 +120,6 @@ const PersonalFinanceTracker = () => {
     deleteGoal: false,
   });
 
-  // Toast notifications state
-  const [toasts, setToasts] = useState([]);
-
-  // Categories
-  const expenseCategories = ['food', 'transportation', 'entertainment', 'shopping', 'bills', 'healthcare', 'rent', 'utilities', 'other'];
-  const incomeCategories = ['salary', 'freelance', 'investment', 'bonus', 'other'];
-
-  // Add spinner styles to document
-  useEffect(() => {
-    const styleElement = document.createElement('style');
-    styleElement.textContent = spinnerStyle;
-    document.head.appendChild(styleElement);
-    return () => document.head.removeChild(styleElement);
-  }, []);
-
-  // Toast notification helper
-  const addToast = (message, type = 'info') => {
-    const id = Date.now();
-    setToasts(prev => [...prev, { id, message, type }]);
-  };
-
-  const removeToast = (id) => {
-    setToasts(prev => prev.filter(toast => toast.id !== id));
-  };
-
   // Update loading state helper
   const setLoading = (key, value) => {
     setLoadingStates(prev => ({ ...prev, [key]: value }));
@@ -289,7 +128,149 @@ const PersonalFinanceTracker = () => {
   // Chart colors
   const COLORS = ['#3b82f6', '#ef4444', '#10b981', '#f59e0b', '#8b5cf6', '#ec4899', '#06b6d4', '#84cc16', '#f97316'];
 
-  // Generate 12 months of data
+  // Form setups
+  const transactionForm = useForm({
+    resolver: zodResolver(transactionSchema),
+    defaultValues: {
+      type: 'expense',
+      category: '',
+      amount: '',
+      description: '',
+      date: new Date(),
+    },
+  });
+
+  const budgetForm = useForm({
+    resolver: zodResolver(budgetSchema),
+    defaultValues: {
+      monthly_income: budgetData.monthly_income || '',
+    },
+  });
+
+  const goalForm = useForm({
+    resolver: zodResolver(goalSchema),
+    defaultValues: {
+      name: '',
+      target_amount: '',
+      current_amount: 0,
+      target_date: new Date(),
+      description: '',
+    },
+  });
+
+  // Initialize categories and data
+  const initializeCategories = async () => {
+    try {
+      // Test API connection first
+      const testResponse = await fetch(`${API_BASE}/transactions/`);
+      console.log('API Connection Test:', testResponse.ok ? 'Connected to Django API' : `Error: ${testResponse.status}`);
+      
+      await fetch(`${API_BASE}/categories/create_defaults/`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+      });
+      
+      const response = await fetch(`${API_BASE}/categories/by_type/`);
+      if (response.ok) {
+        const data = await response.json();
+        setCategories(data);
+        console.log('Categories loaded:', data);
+      }
+    } catch (error) {
+      console.error('Error initializing categories:', error);
+      toast.error('Backend connection failed. Please ensure Django server is running on port 8000.');
+    }
+  };
+
+  // API Functions
+  const fetchDashboardData = async () => {
+    setLoading('dashboard', true);
+    try {
+      const response = await fetch(`${API_BASE}/transactions/monthly_summary/`);
+      if (!response.ok) throw new Error(`Server error: ${response.status}`);
+      const data = await response.json();
+      setDashboardData(data);
+      console.log('Dashboard data:', data);
+    } catch (error) {
+      console.error('Error fetching dashboard data:', error);
+      toast.error('Failed to load dashboard data');
+    } finally {
+      setLoading('dashboard', false);
+    }
+  };
+
+  const fetchSixMonthTrend = async () => {
+    try {
+      const response = await fetch(`${API_BASE}/transactions/six_month_trend/`);
+      if (!response.ok) throw new Error(`Server error: ${response.status}`);
+      const data = await response.json();
+      const fixedData = data.map(month => ({
+        ...month,
+        savings: month.income - month.expenses
+      }));
+      setSixMonthTrend(fixedData);
+    } catch (error) {
+      console.error('Error fetching trend data:', error);
+    }
+  };
+
+  const fetchTransactions = async () => {
+    setLoading('transactions', true);
+    try {
+      const response = await fetch(`${API_BASE}/transactions/`);
+      if (!response.ok) throw new Error(`Server error: ${response.status}`);
+      const data = await response.json();
+      const transactionData = data.results || data;
+      setTransactions(transactionData);
+      setYearlyData(generateYearlyData(transactionData));
+      console.log('Transactions loaded:', transactionData.length);
+    } catch (error) {
+      console.error('Error fetching transactions:', error);
+      toast.error('Failed to load transactions');
+    } finally {
+      setLoading('transactions', false);
+    }
+  };
+
+  const fetchBudgetData = async () => {
+    setLoading('budget', true);
+    try {
+      const response = await fetch(`${API_BASE}/budget/current_budget/`);
+      if (!response.ok) throw new Error(`Server error: ${response.status}`);
+      const data = await response.json();
+      setBudgetData(data);
+    } catch (error) {
+      console.error('Error fetching budget data:', error);
+    } finally {
+      setLoading('budget', false);
+    }
+  };
+
+  const fetchBudgetAnalysis = async () => {
+    try {
+      const response = await fetch(`${API_BASE}/budget/budget_analysis/`);
+      if (!response.ok) throw new Error(`Server error: ${response.status}`);
+      const data = await response.json();
+      setBudgetAnalysis(data);
+    } catch (error) {
+      console.error('Error fetching budget analysis:', error);
+    }
+  };
+
+  const fetchGoals = async () => {
+    try {
+      const response = await fetch(`${API_BASE}/goals/`);
+      if (!response.ok) throw new Error(`Server error: ${response.status}`);
+      const data = await response.json();
+      setGoals(data.results || data);
+      console.log('Goals loaded:', data.results?.length || data.length);
+    } catch (error) {
+      console.error('Error fetching goals:', error);
+      toast.error('Failed to load goals');
+    }
+  };
+
+  // Generate yearly data for charts
   const generateYearlyData = (transactions) => {
     const months = ['January', 'February', 'March', 'April', 'May', 'June', 
                    'July', 'August', 'September', 'October', 'November', 'December'];
@@ -334,16 +315,17 @@ const PersonalFinanceTracker = () => {
     }
   };
 
-  // Calculate actual income breakdown from transactions
+  // Calculate breakdown data
   const getActualIncomeBreakdown = () => {
     const incomeTransactions = transactions.filter(t => t.type === 'income');
     const breakdown = {};
     
     incomeTransactions.forEach(t => {
-      if (!breakdown[t.category]) {
-        breakdown[t.category] = 0;
+      const categoryName = t.category_name || 'Other';
+      if (!breakdown[categoryName]) {
+        breakdown[categoryName] = 0;
       }
-      breakdown[t.category] += parseFloat(t.amount);
+      breakdown[categoryName] += parseFloat(t.amount);
     });
     
     return Object.entries(breakdown).map(([category, amount]) => ({
@@ -352,16 +334,16 @@ const PersonalFinanceTracker = () => {
     }));
   };
 
-  // Calculate actual expense breakdown with all categories
   const getActualExpenseBreakdown = () => {
     const expenseTransactions = transactions.filter(t => t.type === 'expense');
     const breakdown = {};
     
     expenseTransactions.forEach(t => {
-      if (!breakdown[t.category]) {
-        breakdown[t.category] = 0;
+      const categoryName = t.category_name || 'Other';
+      if (!breakdown[categoryName]) {
+        breakdown[categoryName] = 0;
       }
-      breakdown[t.category] += parseFloat(t.amount);
+      breakdown[categoryName] += parseFloat(t.amount);
     });
     
     return Object.entries(breakdown).map(([category, amount]) => ({
@@ -370,80 +352,222 @@ const PersonalFinanceTracker = () => {
     }));
   };
 
-  // API Functions with error handling
-  const fetchDashboardData = async () => {
-    setLoading('dashboard', true);
+  // Transaction form handlers
+  const onSubmitTransaction = async (values) => {
+    setLoading('addTransaction', true);
     try {
-      const response = await fetch(`${API_BASE}/transactions/monthly_summary/`);
-      if (!response.ok) throw new Error(`Server error: ${response.status}`);
-      const data = await response.json();
-      setDashboardData(data);
+      const formattedDate = format(values.date, 'yyyy-MM-dd');
+      const transactionData = {
+        ...values,
+        date: formattedDate,
+      };
+
+      let response;
+      let method = 'POST';
+      let url = `${API_BASE}/transactions/`;
+
+      if (editingTransaction) {
+        method = 'PUT';
+        url = `${API_BASE}/transactions/${editingTransaction.id}/`;
+        setLoading('editTransaction', true);
+      }
+
+      response = await fetch(url, {
+        method,
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(transactionData),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(JSON.stringify(errorData));
+      }
+
+      toast.success(
+        editingTransaction ? 'Transaction updated successfully!' : 'Transaction added successfully!'
+      );
+      
+      // Refresh data
+      await Promise.all([
+        fetchTransactions(),
+        fetchDashboardData(),
+        fetchSixMonthTrend(),
+        fetchBudgetAnalysis()
+      ]);
+      
+      // Reset form and editing state
+      transactionForm.reset({
+        type: 'expense',
+        category: '',
+        amount: '',
+        description: '',
+        date: new Date(),
+      });
+      setEditingTransaction(null);
     } catch (error) {
-      console.error('Error fetching dashboard data:', error);
-      addToast('Failed to load dashboard data. Please check your connection.', 'error');
+      console.error('Error saving transaction:', error);
+      toast.error('Failed to save transaction. Please check your input.');
     } finally {
-      setLoading('dashboard', false);
+      setLoading('addTransaction', false);
+      setLoading('editTransaction', false);
     }
   };
 
-  const fetchSixMonthTrend = async () => {
+  const deleteTransaction = async (id) => {
+    setLoading('deleteTransaction', { ...loadingStates.deleteTransaction, [id]: true });
     try {
-      const response = await fetch(`${API_BASE}/transactions/six_month_trend/`);
-      if (!response.ok) throw new Error(`Server error: ${response.status}`);
-      const data = await response.json();
-      // Fix the savings calculation
-      const fixedData = data.map(month => ({
-        ...month,
-        savings: month.income - month.expenses
-      }));
-      setSixMonthTrend(fixedData);
-    } catch (error) {
-      console.error('Error fetching trend data:', error);
-      addToast('Failed to load trend data.', 'error');
-    }
-  };
+      const response = await fetch(`${API_BASE}/transactions/${id}/`, {
+        method: 'DELETE',
+      });
 
-  const fetchTransactions = async () => {
-    setLoading('transactions', true);
-    try {
-      const response = await fetch(`${API_BASE}/transactions/`);
       if (!response.ok) throw new Error(`Server error: ${response.status}`);
-      const data = await response.json();
-      const transactionData = data.results || data;
-      setTransactions(transactionData);
-      setYearlyData(generateYearlyData(transactionData));
+
+      toast.success('Transaction deleted successfully!');
+      
+      // Refresh data
+      await Promise.all([
+        fetchTransactions(),
+        fetchDashboardData(),
+        fetchSixMonthTrend(),
+        fetchBudgetAnalysis()
+      ]);
     } catch (error) {
-      console.error('Error fetching transactions:', error);
-      addToast('Failed to load transactions. Please check if the backend is running.', 'error');
+      console.error('Error deleting transaction:', error);
+      toast.error('Failed to delete transaction');
     } finally {
-      setLoading('transactions', false);
+      setLoading('deleteTransaction', { ...loadingStates.deleteTransaction, [id]: false });
     }
   };
 
-  const fetchBudgetData = async () => {
-    setLoading('budget', true);
+  const editTransaction = (transaction) => {
+    setEditingTransaction(transaction);
+    transactionForm.reset({
+      type: transaction.type,
+      category: transaction.category_id,
+      amount: transaction.amount,
+      description: transaction.description,
+      date: new Date(transaction.date),
+    });
+  };
+
+  const cancelEdit = () => {
+    setEditingTransaction(null);
+    transactionForm.reset({
+      type: 'expense',
+      category: '',
+      amount: '',
+      description: '',
+      date: new Date(),
+    });
+  };
+
+  // Budget form handlers
+  const updateBudget = async (values) => {
+    setLoading('updateBudget', true);
     try {
-      const response = await fetch(`${API_BASE}/budget/current_budget/`);
+      const response = await fetch(`${API_BASE}/budget/update_budget/`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(values),
+      });
+
       if (!response.ok) throw new Error(`Server error: ${response.status}`);
-      const data = await response.json();
-      setBudgetData(data);
+
+      toast.success('Budget updated successfully!');
+      await Promise.all([fetchBudgetData(), fetchBudgetAnalysis()]);
     } catch (error) {
-      console.error('Error fetching budget data:', error);
-      addToast('Failed to load budget data.', 'error');
+      console.error('Error updating budget:', error);
+      toast.error('Failed to update budget');
     } finally {
-      setLoading('budget', false);
+      setLoading('updateBudget', false);
     }
   };
 
-  const fetchBudgetAnalysis = async () => {
+  // Goal form handlers
+  const onSubmitGoal = async (values) => {
+    setLoading('addGoal', true);
     try {
-      const response = await fetch(`${API_BASE}/budget/budget_analysis/`);
-      if (!response.ok) throw new Error(`Server error: ${response.status}`);
-      const data = await response.json();
-      setBudgetAnalysis(data);
+      const formattedDate = format(values.target_date, 'yyyy-MM-dd');
+      const goalData = {
+        ...values,
+        target_date: formattedDate,
+        current_amount: values.current_amount || 0,
+      };
+
+      const response = await fetch(`${API_BASE}/goals/`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(goalData),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(JSON.stringify(errorData));
+      }
+
+      toast.success('Goal added successfully!');
+      await fetchGoals();
+      
+      goalForm.reset({
+        name: '',
+        target_amount: '',
+        current_amount: 0,
+        target_date: new Date(),
+        description: '',
+      });
     } catch (error) {
-      console.error('Error fetching budget analysis:', error);
-      addToast('Failed to load budget analysis.', 'error');
+      console.error('Error adding goal:', error);
+      toast.error('Failed to add goal');
+    } finally {
+      setLoading('addGoal', false);
+    }
+  };
+
+  const deleteGoal = async (id) => {
+    setLoading('deleteGoal', true);
+    try {
+      const response = await fetch(`${API_BASE}/goals/${id}/`, {
+        method: 'DELETE',
+      });
+
+      if (!response.ok) throw new Error(`Server error: ${response.status}`);
+
+      toast.success('Goal deleted successfully!');
+      await fetchGoals();
+    } catch (error) {
+      console.error('Error deleting goal:', error);
+      toast.error('Failed to delete goal');
+    } finally {
+      setLoading('deleteGoal', false);
+    }
+  };
+
+  const updateGoalProgress = async (goalId, currentAmount) => {
+    setLoading('updateGoal', true);
+    try {
+      const response = await fetch(`${API_BASE}/goals/${goalId}/`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ current_amount: currentAmount }),
+      });
+
+      if (!response.ok) throw new Error(`Server error: ${response.status}`);
+
+      toast.success('Goal progress updated!');
+      await fetchGoals();
+    } catch (error) {
+      console.error('Error updating goal progress:', error);
+      toast.error('Failed to update goal progress');
+    } finally {
+      setLoading('updateGoal', false);
     }
   };
 
@@ -452,6 +576,7 @@ const PersonalFinanceTracker = () => {
     const loadAllData = async () => {
       setLoading('initialLoad', true);
       await Promise.all([
+        initializeCategories(),
         fetchDashboardData(),
         fetchSixMonthTrend(),
         fetchTransactions(),
@@ -465,1056 +590,361 @@ const PersonalFinanceTracker = () => {
     loadAllData();
   }, []);
 
-  // Add new transaction with validation
-  const addTransaction = async (data) => {
-    setLoading('addTransaction', true);
-    try {
-      const response = await fetch(`${API_BASE}/transactions/`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          ...data,
-          amount: parseFloat(data.amount),
-          description: data.description.trim(),
-          date: format(data.date, 'yyyy-MM-dd'),
-        }),
-      });
-
-      if (!response.ok) {
-        throw new Error(`Server error: ${response.status}`);
-      }
-
-      // Refresh data
-      await Promise.all([
-        fetchDashboardData(),
-        fetchSixMonthTrend(),
-        fetchTransactions(),
-        fetchBudgetAnalysis()
-      ]);
-      
-      addToast('Transaction added successfully!', 'success');
-      return true; // Indicate success
-    } catch (error) {
-      console.error('Error adding transaction:', error);
-      addToast('Failed to add transaction. Please check your connection and try again.', 'error');
-      return false; // Indicate failure
-    } finally {
-      setLoading('addTransaction', false);
-    }
-  };
-
-  const editTransaction = async (data) => {
-    setLoading('editTransaction', true);
-    try {
-      const response = await fetch(`${API_BASE}/transactions/${data.id}/`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          ...data,
-          amount: parseFloat(data.amount),
-          description: data.description.trim(),
-          date: format(data.date, 'yyyy-MM-dd'),
-        }),
-      });
-
-      if (!response.ok) {
-        throw new Error(`Server error: ${response.status}`);
-      }
-
-      // Refresh data
-      await Promise.all([
-        fetchDashboardData(),
-        fetchSixMonthTrend(),
-        fetchTransactions(),
-        fetchBudgetAnalysis()
-      ]);
-      
-      addToast('Transaction updated successfully!', 'success');
-      return true; // Indicate success
-    } catch (error) {
-      console.error('Error updating transaction:', error);
-      addToast('Failed to update transaction. Please check your connection and try again.', 'error');
-      return false; // Indicate failure
-    } finally {
-      setLoading('editTransaction', false);
-    }
-  };
-
-  // Delete transaction with confirmation
-  const deleteTransaction = async (id) => {
-    setLoadingStates(prev => ({
-      ...prev,
-      deleteTransaction: { ...prev.deleteTransaction, [id]: true }
-    }));
-    
-    try {
-      const response = await fetch(`${API_BASE}/transactions/${id}/`, {
-        method: 'DELETE',
-      });
-
-      if (!response.ok && response.status !== 204) {
-        throw new Error(`Server error: ${response.status}`);
-      }
-
-      await Promise.all([
-        fetchDashboardData(),
-        fetchSixMonthTrend(),
-        fetchTransactions(),
-        fetchBudgetAnalysis()
-      ]);
-      
-      addToast('Transaction deleted successfully!', 'success');
-    } catch (error) {
-      console.error('Error deleting transaction:', error);
-      addToast('Failed to delete transaction. Please try again.', 'error');
-    } finally {
-      setLoadingStates(prev => ({
-        ...prev,
-        deleteTransaction: { ...prev.deleteTransaction, [id]: false }
-      }));
-    }
-  };
-
-  // Update budget with validation
-  const handleBudgetSubmit = async (data) => {
-    const income = parseFloat(data.monthly_income);
-    if (!income || income <= 0) {
-      addToast('Please enter a valid monthly income greater than 0', 'warning');
-      return;
-    }
-
-    setLoading('updateBudget', true);
-    try {
-      const response = await fetch(`${API_BASE}/budget/update_income/`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          monthly_income: income
-        }),
-      });
-
-      if (!response.ok) {
-        throw new Error(`Server error: ${response.status}`);
-      }
-
-      const newBudgetData = await response.json();
-      setBudgetData(newBudgetData);
-      await fetchBudgetAnalysis();
-      addToast('Budget updated successfully!', 'success');
-    } catch (error) {
-      console.error('Error updating budget:', error);
-      addToast('Failed to update budget. Please try again.', 'error');
-    } finally {
-      setLoading('updateBudget', false);
-    }
-  };
-
-  // Goals Management Functions
-  const addGoal = async (data) => {
-    setLoading('addGoal', true);
-    try {
-      const response = await fetch(`${API_BASE}/goals/`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          ...data,
-          target_amount: parseFloat(data.target_amount),
-          current_amount: parseFloat(data.current_amount) || 0,
-          target_date: format(data.target_date, 'yyyy-MM-dd'),
-        }),
-      });
-
-      if (!response.ok) {
-        throw new Error(`Server error: ${response.status}`);
-      }
-
-      await fetchGoals();
-      addToast('Goal added successfully!', 'success');
-      return true;
-    } catch (error) {
-      console.error('Error adding goal:', error);
-      addToast('Failed to add goal. Please try again.', 'error');
-      return false;
-    } finally {
-      setLoading('addGoal', false);
-    }
-  };
-
-  const updateGoal = async (id, data) => {
-    setLoading('updateGoal', true);
-    try {
-      const response = await fetch(`${API_BASE}/goals/${id}/`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          ...data,
-          target_amount: parseFloat(data.target_amount),
-          current_amount: parseFloat(data.current_amount) || 0,
-          target_date: format(data.target_date, 'yyyy-MM-dd'),
-        }),
-      });
-
-      if (!response.ok) {
-        throw new Error(`Server error: ${response.status}`);
-      }
-
-      await fetchGoals();
-      addToast('Goal updated successfully!', 'success');
-      return true;
-    } catch (error) {
-      console.error('Error updating goal:', error);
-      addToast('Failed to update goal. Please try again.', 'error');
-      return false;
-    } finally {
-      setLoading('updateGoal', false);
-    }
-  };
-
-  const deleteGoal = async (id) => {
-    setLoading('deleteGoal', true);
-    try {
-      const response = await fetch(`${API_BASE}/goals/${id}/`, {
-        method: 'DELETE',
-      });
-
-      if (!response.ok && response.status !== 204) {
-        throw new Error(`Server error: ${response.status}`);
-      }
-
-      await fetchGoals();
-      addToast('Goal deleted successfully!', 'success');
-    } catch (error) {
-      console.error('Error deleting goal:', error);
-      addToast('Failed to delete goal. Please try again.', 'error');
-    } finally {
-      setLoading('deleteGoal', false);
-    }
-  };
-
-  const fetchGoals = async () => {
-    try {
-      const response = await fetch(`${API_BASE}/goals/`);
-      if (response.ok) {
-        const data = await response.json();
-        setGoals(data);
-      }
-    } catch (error) {
-      console.error('Error fetching goals:', error);
-    }
-  };
-
-  // Export/Import Functions
-  const exportToCSV = () => {
-    try {
-      const headers = ['Date', 'Type', 'Category', 'Amount', 'Description'];
-      const csvContent = [
-        headers.join(','),
-        ...transactions.map(t => [
-          t.date,
-          t.type,
-          t.category,
-          t.amount,
-          `"${t.description.replace(/"/g, '""')}"`
-        ].join(','))
-      ].join('\n');
-
-      const blob = new Blob([csvContent], { type: 'text/csv' });
-      const url = window.URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `transactions_${format(new Date(), 'yyyy-MM-dd')}.csv`;
-      a.click();
-      window.URL.revokeObjectURL(url);
-      
-      addToast('Transactions exported successfully!', 'success');
-    } catch (error) {
-      console.error('Error exporting data:', error);
-      addToast('Failed to export data. Please try again.', 'error');
-    }
-  };
-
-  const importFromCSV = (file) => {
-    const reader = new FileReader();
-    reader.onload = async (e) => {
-      try {
-        const csv = e.target.result;
-        const lines = csv.split('\n');
-        const headers = lines[0].split(',');
-        
-        for (let i = 1; i < lines.length; i++) {
-          if (lines[i].trim()) {
-            const values = lines[i].split(',');
-            const transaction = {
-              date: new Date(values[0]),
-              type: values[1],
-              category: values[2],
-              amount: parseFloat(values[3]),
-              description: values[4].replace(/"/g, '').trim()
-            };
-            
-            if (transaction.date && transaction.type && transaction.category && 
-                transaction.amount > 0 && transaction.description) {
-              await addTransaction(transaction);
-            }
-          }
-        }
-        
-        addToast('Transactions imported successfully!', 'success');
-      } catch (error) {
-        console.error('Error importing data:', error);
-        addToast('Failed to import data. Please check file format.', 'error');
-      }
-    };
-    reader.readAsText(file);
-  };
-
-  // Dashboard Component
-  const Dashboard = () => {
-    const incomeBreakdown = getActualIncomeBreakdown();
-    const expenseBreakdown = getActualExpenseBreakdown();
-    const filteredMonths = getFilteredMonths();
-    
-    // Colors for charts
-    const expenseColors = ['#ef4444', '#f97316', '#eab308', '#84cc16', '#10b981', '#06b6d4', '#3b82f6', '#8b5cf6', '#ec4899'];
-    const incomeColors = ['#10b981', '#06b6d4'];
-
-    // Month indicator colors based on net value
-    const getMonthColor = (net) => {
-      if (net > 1000) return '#10b981'; // Green
-      if (net > 0) return '#eab308'; // Yellow
-      return '#ef4444'; // Red
-    };
-
-    if (loadingStates.dashboard) {
-      return (
-        <div style={{ 
-          backgroundColor: '#1a1a1a', 
-          minHeight: '100vh', 
-          padding: '24px',
-          display: 'flex',
-          justifyContent: 'center',
-          alignItems: 'center'
-        }}>
-          <div style={{ textAlign: 'center', color: '#9ca3af' }}>
-            <LoadingSpinner size={40} />
-            <p style={{ marginTop: '16px' }}>Loading dashboard data...</p>
-          </div>
-        </div>
-      );
-    }
-
-    return (
-      <div style={{ backgroundColor: '#1a1a1a', minHeight: '100vh', padding: '24px' }}>
-        {/* Top Section with 3 Charts */}
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(400px, 1fr))', gap: '24px', marginBottom: '24px' }}>
-          {/* 2025 Savings Chart */}
-          <div style={{ backgroundColor: '#2a2a2a', borderRadius: '12px', padding: '24px', border: '1px solid #3a3a3a' }}>
-            <div style={{ display: 'flex', alignItems: 'center', marginBottom: '16px' }}>
-              <TrendingUp style={{ width: '20px', height: '20px', color: '#9ca3af', marginRight: '8px' }} />
-              <h3 style={{ color: '#e5e7eb', fontSize: '16px', fontWeight: '500' }}>2025 Savings</h3>
-            </div>
-            <ResponsiveContainer width="100%" height={250}>
-              <LineChart data={sixMonthTrend}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#3a3a3a" />
-                <XAxis 
-                  dataKey="month" 
-                  stroke="#6b7280"
-                  style={{ fontSize: '12px' }}
-                />
-                <YAxis 
-                  stroke="#6b7280"
-                  style={{ fontSize: '12px' }}
-                  tickFormatter={(value) => `$${(value/1000).toFixed(0)}K`}
-                />
-                <Tooltip 
-                  contentStyle={{ backgroundColor: '#2a2a2a', border: '1px solid #3a3a3a' }}
-                  labelStyle={{ color: '#e5e7eb' }}
-                />
-                <Line 
-                  type="monotone" 
-                  dataKey="savings" 
-                  stroke="#3b82f6"
-                  strokeWidth={2}
-                  dot={{ fill: '#3b82f6', r: 4 }}
-                />
-              </LineChart>
-            </ResponsiveContainer>
-          </div>
-
-          {/* Income Breakdown */}
-          <div style={{ backgroundColor: '#2a2a2a', borderRadius: '12px', padding: '24px', border: '1px solid #3a3a3a' }}>
-            <div style={{ display: 'flex', alignItems: 'center', marginBottom: '16px' }}>
-              <PiggyBank style={{ width: '20px', height: '20px', color: '#9ca3af', marginRight: '8px' }} />
-              <h3 style={{ color: '#e5e7eb', fontSize: '16px', fontWeight: '500' }}>Income Breakdown</h3>
-            </div>
-            {incomeBreakdown.length > 0 ? (
-              <>
-                <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '200px' }}>
-                  <div style={{ position: 'relative', width: 180, height: 180 }}>
-                    <ResponsiveContainer width="100%" height="100%">
-                      <PieChart>
-                        <Pie
-                          data={incomeBreakdown}
-                          cx="50%"
-                          cy="50%"
-                          innerRadius={60}
-                          outerRadius={80}
-                          paddingAngle={2}
-                          dataKey="value"
-                        >
-                          {incomeBreakdown.map((entry, index) => (
-                            <Cell key={`cell-${index}`} fill={incomeColors[index % incomeColors.length]} />
-                          ))}
-                        </Pie>
-                      </PieChart>
-                    </ResponsiveContainer>
-                    <div style={{ 
-                      position: 'absolute', 
-                      top: '50%', 
-                      left: '50%', 
-                      transform: 'translate(-50%, -50%)',
-                      textAlign: 'center'
-                    }}>
-                      <div style={{ fontSize: '24px', fontWeight: 'bold', color: '#ffffff' }}>
-                        ${(dashboardData.monthly_income/1000).toFixed(1)}K
-                      </div>
-                      <div style={{ fontSize: '12px', color: '#9ca3af' }}>Total Amount</div>
-                    </div>
-                  </div>
-                </div>
-                <div style={{ display: 'flex', justifyContent: 'center', gap: '16px', marginTop: '16px', flexWrap: 'wrap' }}>
-                  {incomeBreakdown.map((item, index) => (
-                    <div key={item.name} style={{ display: 'flex', alignItems: 'center' }}>
-                      <div style={{ 
-                        width: '12px', 
-                        height: '12px', 
-                        borderRadius: '2px',
-                        backgroundColor: incomeColors[index % incomeColors.length],
-                        marginRight: '6px'
-                      }}></div>
-                      <span style={{ fontSize: '12px', color: '#9ca3af' }}>{item.name}</span>
-                    </div>
-                  ))}
-                </div>
-              </>
-            ) : (
-              <div style={{ 
-                display: 'flex', 
-                justifyContent: 'center', 
-                alignItems: 'center', 
-                height: '250px',
-                color: '#6b7280'
-              }}>
-                No income data available
+  // Component renders
+  const Dashboard = () => (
+    <div className="space-y-8">
+      {/* Key Metrics Cards */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <Card className="bg-gray-800/50 backdrop-blur-sm border-gray-700/50 hover:border-green-500/30 transition-all duration-300">
+          <CardContent className="p-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-gray-400 text-sm mb-1">Monthly Income</p>
+                <p className="text-2xl font-bold text-green-400">
+                  ${dashboardData.monthly_income?.toLocaleString() || 0}
+                </p>
               </div>
-            )}
-          </div>
-
-          {/* Expenses Breakdown */}
-          <div style={{ backgroundColor: '#2a2a2a', borderRadius: '12px', padding: '24px', border: '1px solid #3a3a3a' }}>
-            <div style={{ display: 'flex', alignItems: 'center', marginBottom: '16px' }}>
-              <TrendingDown style={{ width: '20px', height: '20px', color: '#9ca3af', marginRight: '8px' }} />
-              <h3 style={{ color: '#e5e7eb', fontSize: '16px', fontWeight: '500' }}>Expenses Breakdown</h3>
-            </div>
-            {expenseBreakdown.length > 0 ? (
-              <>
-                <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '200px' }}>
-                  <div style={{ position: 'relative', width: 180, height: 180 }}>
-                    <ResponsiveContainer width="100%" height="100%">
-                      <PieChart>
-                        <Pie
-                          data={expenseBreakdown}
-                          cx="50%"
-                          cy="50%"
-                          innerRadius={60}
-                          outerRadius={80}
-                          paddingAngle={2}
-                          dataKey="value"
-                        >
-                          {expenseBreakdown.map((entry, index) => (
-                            <Cell key={`cell-${index}`} fill={expenseColors[index % expenseColors.length]} />
-                          ))}
-                        </Pie>
-                      </PieChart>
-                    </ResponsiveContainer>
-                    <div style={{ 
-                      position: 'absolute', 
-                      top: '50%', 
-                      left: '50%', 
-                      transform: 'translate(-50%, -50%)',
-                      textAlign: 'center'
-                    }}>
-                      <div style={{ fontSize: '24px', fontWeight: 'bold', color: '#ffffff' }}>
-                        ${(dashboardData.monthly_expenses/1000).toFixed(1)}K
-                      </div>
-                      <div style={{ fontSize: '12px', color: '#9ca3af' }}>Total Amount</div>
-                    </div>
-                  </div>
-                </div>
-                <div style={{ display: 'flex', justifyContent: 'center', gap: '12px', marginTop: '16px', flexWrap: 'wrap' }}>
-                  {expenseBreakdown.map((item, index) => (
-                    <div key={item.name} style={{ display: 'flex', alignItems: 'center' }}>
-                      <div style={{ 
-                        width: '12px', 
-                        height: '12px', 
-                        borderRadius: '2px',
-                        backgroundColor: expenseColors[index % expenseColors.length],
-                        marginRight: '6px'
-                      }}></div>
-                      <span style={{ fontSize: '12px', color: '#9ca3af' }}>{item.name}</span>
-                    </div>
-                  ))}
-                </div>
-              </>
-            ) : (
-              <div style={{ 
-                display: 'flex', 
-                justifyContent: 'center', 
-                alignItems: 'center', 
-                height: '250px',
-                color: '#6b7280'
-              }}>
-                No expense data available
+              <div className="p-3 bg-green-500/10 rounded-full">
+                <TrendingUp className="h-6 w-6 text-green-400" />
               </div>
-            )}
-          </div>
-        </div>
-
-        {/* Total Savings Section */}
-        <div style={{ backgroundColor: '#2a2a2a', borderRadius: '12px', padding: '24px', border: '1px solid #3a3a3a' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
-            <div style={{ display: 'flex', alignItems: 'center' }}>
-              <Activity style={{ width: '20px', height: '20px', color: '#9ca3af', marginRight: '8px' }} />
-              <h3 style={{ color: '#e5e7eb', fontSize: '16px', fontWeight: '500' }}>Total Savings</h3>
             </div>
-            <div style={{ display: 'flex', gap: '8px' }}>
-              <Button 
-                variant={quarterFilter === 'all' ? 'secondary' : 'ghost'}
+          </CardContent>
+        </Card>
+
+        <Card className="bg-gray-800/50 backdrop-blur-sm border-gray-700/50 hover:border-red-500/30 transition-all duration-300">
+          <CardContent className="p-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-gray-400 text-sm mb-1">Monthly Expenses</p>
+                <p className="text-2xl font-bold text-red-400">
+                  ${dashboardData.monthly_expenses?.toLocaleString() || 0}
+                </p>
+              </div>
+              <div className="p-3 bg-red-500/10 rounded-full">
+                <TrendingDown className="h-6 w-6 text-red-400" />
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className="bg-gray-800/50 backdrop-blur-sm border-gray-700/50 hover:border-blue-500/30 transition-all duration-300">
+          <CardContent className="p-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-gray-400 text-sm mb-1">Net Savings</p>
+                <p className="text-2xl font-bold text-blue-400">
+                  ${(dashboardData.monthly_income - dashboardData.monthly_expenses)?.toLocaleString() || 0}
+                </p>
+              </div>
+              <div className="p-3 bg-blue-500/10 rounded-full">
+                <PiggyBank className="h-6 w-6 text-blue-400" />
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Charts Grid - Matching the original layout */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        {/* Savings Trend Chart */}
+        <Card className="bg-gray-800/50 backdrop-blur-sm border-gray-700/50">
+          <CardHeader className="pb-3">
+            <CardTitle className="flex items-center text-lg font-semibold text-gray-200">
+              <TrendingUp className="h-5 w-5 text-blue-400 mr-2" />
+              2025 Savings
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="h-48">
+              <ResponsiveContainer width="100%" height="100%">
+                <LineChart data={sixMonthTrend}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
+                  <XAxis 
+                    dataKey="month" 
+                    stroke="#9ca3af" 
+                    fontSize={12}
+                    axisLine={false}
+                    tickLine={false}
+                  />
+                  <YAxis 
+                    stroke="#9ca3af" 
+                    fontSize={12}
+                    axisLine={false}
+                    tickLine={false}
+                    tickFormatter={(value) => `$${value/1000}K`}
+                  />
+                  <Tooltip 
+                    contentStyle={{ 
+                      backgroundColor: '#1f2937', 
+                      border: '1px solid #374151',
+                      borderRadius: '8px',
+                      color: '#e5e7eb'
+                    }}
+                    formatter={(value) => [`$${value.toLocaleString()}`, 'Savings']}
+                  />
+                  <Line 
+                    type="monotone" 
+                    dataKey="savings" 
+                    stroke="#3b82f6" 
+                    strokeWidth={2}
+                    dot={{ fill: '#3b82f6', strokeWidth: 2, r: 4 }}
+                    activeDot={{ r: 6, stroke: '#3b82f6', strokeWidth: 2, fill: '#1e40af' }}
+                  />
+                </LineChart>
+              </ResponsiveContainer>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Income Breakdown */}
+        <Card className="bg-gray-800/50 backdrop-blur-sm border-gray-700/50">
+          <CardHeader className="pb-3">
+            <CardTitle className="flex items-center text-lg font-semibold text-gray-200">
+              <Activity className="h-5 w-5 text-green-400 mr-2" />
+              Income Breakdown
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="h-48">
+              <ResponsiveContainer width="100%" height="100%">
+                <PieChart>
+                  <Pie
+                    data={getActualIncomeBreakdown()}
+                    cx="50%"
+                    cy="50%"
+                    innerRadius={40}
+                    outerRadius={80}
+                    paddingAngle={2}
+                    dataKey="value"
+                  >
+                    {getActualIncomeBreakdown().map((entry, index) => (
+                      <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                    ))}
+                  </Pie>
+                  <Tooltip 
+                    contentStyle={{ 
+                      backgroundColor: '#1f2937', 
+                      border: '1px solid #374151',
+                      borderRadius: '8px',
+                      color: '#e5e7eb'
+                    }}
+                    formatter={(value) => [`$${value.toLocaleString()}`, 'Amount']}
+                  />
+                </PieChart>
+              </ResponsiveContainer>
+            </div>
+            <div className="flex flex-wrap justify-center gap-2 mt-2">
+              {getActualIncomeBreakdown().slice(0, 3).map((entry, index) => (
+                <div key={entry.name} className="flex items-center">
+                  <div 
+                    className="w-3 h-3 rounded-full mr-1" 
+                    style={{ backgroundColor: COLORS[index % COLORS.length] }}
+                  />
+                  <span className="text-xs text-gray-400">{entry.name}</span>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Expenses Breakdown */}
+        <Card className="bg-gray-800/50 backdrop-blur-sm border-gray-700/50">
+          <CardHeader className="pb-3">
+            <CardTitle className="flex items-center text-lg font-semibold text-gray-200">
+              <BarChart3 className="h-5 w-5 text-red-400 mr-2" />
+              Expenses Breakdown
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="h-48">
+              <ResponsiveContainer width="100%" height="100%">
+                <PieChart>
+                  <Pie
+                    data={getActualExpenseBreakdown()}
+                    cx="50%"
+                    cy="50%"
+                    innerRadius={40}
+                    outerRadius={80}
+                    paddingAngle={2}
+                    dataKey="value"
+                  >
+                    {getActualExpenseBreakdown().map((entry, index) => (
+                      <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                    ))}
+                  </Pie>
+                  <Tooltip 
+                    contentStyle={{ 
+                      backgroundColor: '#1f2937', 
+                      border: '1px solid #374151',
+                      borderRadius: '8px',
+                      color: '#e5e7eb'
+                    }}
+                    formatter={(value) => [`$${value.toLocaleString()}`, 'Amount']}
+                  />
+                </PieChart>
+              </ResponsiveContainer>
+            </div>
+            <div className="flex flex-wrap justify-center gap-2 mt-2">
+              {getActualExpenseBreakdown().slice(0, 4).map((entry, index) => (
+                <div key={entry.name} className="flex items-center">
+                  <div 
+                    className="w-3 h-3 rounded-full mr-1" 
+                    style={{ backgroundColor: COLORS[index % COLORS.length] }}
+                  />
+                  <span className="text-xs text-gray-400">{entry.name}</span>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Total Savings Monthly View - Matching the image */}
+      <Card className="bg-gray-800/50 backdrop-blur-sm border-gray-700/50">
+        <CardHeader className="pb-4">
+          <div className="flex items-center justify-between">
+            <CardTitle className="flex items-center text-lg font-semibold text-gray-200">
+              <Zap className="h-5 w-5 text-blue-400 mr-2" />
+              Total Savings
+            </CardTitle>
+            <div className="flex gap-2">
+              <Button
+                variant={quarterFilter === 'all' ? 'default' : 'outline'}
+                size="sm"
                 onClick={() => setQuarterFilter('all')}
+                className="h-8 px-3 text-xs"
               >
                 All Months
               </Button>
-              {['Q1', 'Q2', 'Q3', 'Q4'].map(q => (
-                <Button 
-                  key={q}
-                  variant={quarterFilter === q ? 'secondary' : 'ghost'}
-                  onClick={() => setQuarterFilter(q)}
+              {['Q1', 'Q2', 'Q3', 'Q4'].map((quarter) => (
+                <Button
+                  key={quarter}
+                  variant={quarterFilter === quarter ? 'default' : 'outline'}
+                  size="sm"
+                  onClick={() => setQuarterFilter(quarter)}
+                  className="h-8 px-3 text-xs"
                 >
-                  {q}
+                  {quarter}
                 </Button>
               ))}
             </div>
           </div>
-          
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: '16px' }}>
-            {filteredMonths.map((month) => (
-              <div key={month.month} style={{ 
-                backgroundColor: '#1a1a1a', 
-                borderRadius: '8px', 
-                padding: '16px',
-                border: '1px solid #3a3a3a'
-              }}>
-                <div style={{ display: 'flex', alignItems: 'center', marginBottom: '12px' }}>
-                  <div style={{ 
-                    width: '12px', 
-                    height: '12px', 
-                    borderRadius: '50%',
-                    backgroundColor: getMonthColor(month.net),
-                    marginRight: '8px'
-                  }}></div>
-                  <span style={{ color: '#e5e7eb', fontSize: '14px', fontWeight: '500' }}>{month.month}</span>
-                </div>
-                <div style={{ fontSize: '12px', color: '#9ca3af', marginBottom: '4px' }}>
-                  Income: <span style={{ color: '#10b981' }}>${month.income.toLocaleString()}</span>
-                </div>
-                <div style={{ fontSize: '12px', color: '#9ca3af', marginBottom: '4px' }}>
-                  Expenses: <span style={{ color: '#ef4444' }}>${month.expenses.toLocaleString()}</span>
-                </div>
-                <div style={{ fontSize: '12px', color: '#9ca3af' }}>
-                  Net: <span style={{ color: month.net >= 0 ? '#10b981' : '#ef4444', fontWeight: 'bold' }}>
-                    ${month.net.toLocaleString()}
-                  </span>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      </div>
-    );
-  };
-
-  // Transactions Component
-  const Transactions = () => {
-    const transactionForm = useForm({
-      resolver: zodResolver(transactionSchema),
-      defaultValues: {
-        type: 'expense',
-        category: 'food',
-        amount: '',
-        description: '',
-        date: new Date(),
-      },
-    });
-
-    const onSubmit = async (data) => {
-      const success = await addTransaction(data);
-      if (success) {
-        transactionForm.reset({
-          type: 'expense',
-          category: 'food',
-          amount: '',
-          description: '',
-          date: new Date(),
-        });
-      }
-    };
-
-    const transactionType = transactionForm.watch('type');
-    const currentCategories = transactionType === 'income' ? incomeCategories : expenseCategories;
-
-    useEffect(() => {
-      transactionForm.setValue('category', currentCategories[0]);
-    }, [transactionType, currentCategories, transactionForm]);
-
-    return (
-      <div style={{ backgroundColor: '#1a1a1a', minHeight: '100vh', padding: '24px' }}>
-        {/* Add Transaction Form */}
-        <div style={{ 
-          backgroundColor: '#2a2a2a', 
-          borderRadius: '12px', 
-          padding: '20px', 
-          marginBottom: '24px', 
-          border: '1px solid #3a3a3a'
-        }}>
-          <h3 style={{ color: '#e5e7eb', fontSize: '18px', fontWeight: '600', marginBottom: '16px', display: 'flex', alignItems: 'center' }}>
-            <Plus style={{ width: '20px', height: '20px', color: '#3b82f6', marginRight: '8px' }} />
-            Add New Transaction
-          </h3>
-          <Form {...transactionForm}>
-            <form onSubmit={transactionForm.handleSubmit(onSubmit)} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: '16px', alignItems: 'start' }}>
-                <FormField
-                  control={transactionForm.control}
-                  name="type"
-                  render={({ field }) => (
-                    <FormItem>
-                      <Select onValueChange={field.onChange} defaultValue={field.value}>
-                        <FormControl>
-                          <SelectTrigger style={{ 
-                            backgroundColor: '#1a1a1a', 
-                            borderColor: '#3a3a3a', 
-                            color: '#e5e7eb',
-                            height: '38px' 
-                          }}>
-                            <SelectValue placeholder="Type" />
-                          </SelectTrigger>
-                        </FormControl>
-                        <SelectContent style={{ backgroundColor: '#2a2a2a', borderColor: '#3a3a3a', color: '#e5e7eb' }}>
-                          <SelectItem value="expense">Expense</SelectItem>
-                          <SelectItem value="income">Income</SelectItem>
-                        </SelectContent>
-                      </Select>
-                      <FormMessage style={{ color: '#ef4444', fontSize: '12px', marginTop: '4px' }} />
-                    </FormItem>
-                  )}
-                />
-                <FormField
-                  control={transactionForm.control}
-                  name="category"
-                  render={({ field }) => (
-                    <FormItem>
-                      <Select onValueChange={field.onChange} value={field.value}>
-                        <FormControl>
-                          <SelectTrigger style={{ 
-                            backgroundColor: '#1a1a1a', 
-                            borderColor: '#3a3a3a', 
-                            color: '#e5e7eb',
-                            height: '38px'
-                          }}>
-                            <SelectValue placeholder="Category" />
-                          </SelectTrigger>
-                        </FormControl>
-                        <SelectContent style={{ backgroundColor: '#2a2a2a', borderColor: '#3a3a3a', color: '#e5e7eb' }}>
-                          {currentCategories.map(cat => (
-                            <SelectItem key={cat} value={cat} style={{ textTransform: 'capitalize' }}>
-                              {cat.charAt(0).toUpperCase() + cat.slice(1)}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                      <FormMessage style={{ color: '#ef4444', fontSize: '12px', marginTop: '4px' }} />
-                    </FormItem>
-                  )}
-                />
-                <FormField
-                  control={transactionForm.control}
-                  name="amount"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormControl>
-                        <Input 
-                          type="number" 
-                          placeholder="Amount" 
-                          style={{ 
-                            backgroundColor: '#1a1a1a', 
-                            borderColor: '#3a3a3a', 
-                            color: '#e5e7eb',
-                            height: '38px'
-                          }} 
-                          {...field} 
-                        />
-                      </FormControl>
-                      <FormMessage style={{ color: '#ef4444', fontSize: '12px', marginTop: '4px' }} />
-                    </FormItem>
-                  )}
-                />
-                <FormField
-                  control={transactionForm.control}
-                  name="date"
-                  render={({ field }) => (
-                    <FormItem>
-                      <Popover>
-                        <PopoverTrigger asChild>
-                          <FormControl>
-                            <Button
-                              variant={"outline"}
-                              style={{
-                                backgroundColor: '#1a1a1a', 
-                                borderColor: '#3a3a3a', 
-                                color: field.value ? '#e5e7eb' : '#6b7280',
-                                width: '100%',
-                                height: '38px',
-                                display: 'flex',
-                                justifyContent: 'flex-start',
-                                textAlign: 'left'
-                              }}
-                            >
-                              <CalendarIcon style={{ width: '16px', height: '16px', marginRight: '8px', color: '#3b82f6' }} />
-                              {field.value ? (
-                                format(field.value, "PPP")
-                              ) : (
-                                <span>Pick a date</span>
-                              )}
-                            </Button>
-                          </FormControl>
-                        </PopoverTrigger>
-                        <PopoverContent style={{ 
-                          width: 'auto', 
-                          padding: 0, 
-                          backgroundColor: '#2a2a2a', 
-                          borderColor: '#3a3a3a' 
-                        }} align="start">
-                          <Calendar
-                            mode="single"
-                            selected={field.value}
-                            onSelect={field.onChange}
-                            initialFocus
-                          />
-                        </PopoverContent>
-                      </Popover>
-                      <FormMessage style={{ color: '#ef4444', fontSize: '12px', marginTop: '4px' }} />
-                    </FormItem>
-                  )}
-                />
-                <Button 
-                  type="submit" 
-                  disabled={loadingStates.addTransaction} 
-                  style={{
-                    backgroundColor: '#3b82f6',
-                    color: 'white',
-                    border: 'none',
-                    padding: '0 16px',
-                    height: '38px',
-                    borderRadius: '6px',
-                    cursor: loadingStates.addTransaction ? 'not-allowed' : 'pointer',
-                    opacity: loadingStates.addTransaction ? 0.7 : 1,
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    gap: '8px',
-                    width: '100%'
-                  }}
+        </CardHeader>
+        <CardContent>
+          {/* Monthly Cards Grid */}
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
+            {getFilteredMonths().map((monthData) => {
+              const hasData = monthData.income > 0 || monthData.expenses > 0;
+              const isCurrentMonth = monthData.monthIndex === new Date().getMonth();
+              
+              return (
+                <Card 
+                  key={monthData.month} 
+                  className={`transition-all duration-200 ${
+                    hasData 
+                      ? 'bg-green-500/10 border-green-500/30 hover:border-green-500/50' 
+                      : 'bg-gray-800/30 border-gray-700/50 hover:border-gray-600/50'
+                  } ${isCurrentMonth ? 'ring-2 ring-blue-500/50' : ''}`}
                 >
-                  {loadingStates.addTransaction ? (
-                    <>
-                      <LoadingSpinner size={16} />
-                      <span>Adding...</span>
-                    </>
-                  ) : (
-                    <>
-                      <Plus style={{ width: '16px', height: '16px' }} />
-                      Add
-                    </>
-                  )}
-                </Button>
-              </div>
-              <FormField
-                control={transactionForm.control}
-                name="description"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormControl>
-                      <Input 
-                        placeholder="Description (e.g., Grocery shopping, Salary payment)" 
-                        style={{ 
-                          backgroundColor: '#1a1a1a', 
-                          borderColor: '#3a3a3a', 
-                          color: '#e5e7eb',
-                          height: '38px'
-                        }} 
-                        {...field} 
-                      />
-                    </FormControl>
-                    <FormMessage style={{ color: '#ef4444', fontSize: '12px', marginTop: '4px' }} />
-                  </FormItem>
-                )}
-              />
-            </form>
-          </Form>
-        </div>
-
-        {/* Transactions List */}
-        <div className="bg-[#2a2a2a] rounded-xl p-6 border border-[#3a3a3a]">
-          <div className="flex justify-between items-center mb-6">
-            <h3 className="text-gray-200 text-lg font-semibold flex items-center">
-              <DollarSign className="h-5 w-5 mr-2 text-blue-400" />
-              Recent Transactions
-            </h3>
-            <div className="text-sm text-gray-400">
-              {transactions.length > 0 ? `Showing ${Math.min(20, transactions.length)} of ${transactions.length} transactions` : 'No transactions'}
-            </div>
-          </div>
-          {loadingStates.transactions ? (
-            <div className="text-center py-12 text-gray-400">
-              <LoadingSpinner size={30} />
-              <p className="mt-4">Loading transactions...</p>
-            </div>
-          ) : (
-            <div className="overflow-x-auto rounded-md">
-              <table className="w-full border-collapse">
-                <thead className="bg-[#1a1a1a]">
-                  <tr className="border-b border-[#3a3a3a]">
-                    <th className="text-left py-3 px-4 text-gray-400 text-sm font-medium">Date</th>
-                    <th className="text-left py-3 px-4 text-gray-400 text-sm font-medium">Type</th>
-                    <th className="text-left py-3 px-4 text-gray-400 text-sm font-medium">Category</th>
-                    <th className="text-left py-3 px-4 text-gray-400 text-sm font-medium">Description</th>
-                    <th className="text-right py-3 px-4 text-gray-400 text-sm font-medium">Amount</th>
-                    <th className="text-center py-3 px-4 text-gray-400 text-sm font-medium">Actions</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {transactions.slice(0, 20).map(transaction => (
-                    <tr key={transaction.id} className="border-b border-[#3a3a3a] hover:bg-[#222]">
-                      <td className="py-3 px-4 text-gray-200 text-sm">
-                        {new Date(transaction.date).toLocaleDateString()}
-                      </td>
-                      <td className="py-3 px-4">
-                        <span className={`px-2 py-1 rounded text-xs font-medium ${
-                          transaction.type === 'income' ? 'bg-green-900 text-green-300' : 'bg-red-900 text-red-300'
-                        }`}>
-                          {transaction.type}
+                  <CardContent className="p-4">
+                    <div className="flex items-center justify-between mb-2">
+                      <div className={`w-3 h-3 rounded-full ${hasData ? 'bg-green-400' : 'bg-red-400'}`} />
+                      <h4 className="text-sm font-medium text-gray-300">{monthData.month}</h4>
+                    </div>
+                    <div className="space-y-1 text-xs">
+                      <div className="flex justify-between">
+                        <span className="text-gray-400">Income:</span>
+                        <span className="text-green-400">${monthData.income.toLocaleString()}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-gray-400">Expenses:</span>
+                        <span className="text-red-400">${monthData.expenses.toLocaleString()}</span>
+                      </div>
+                      <div className="flex justify-between border-t border-gray-600 pt-1">
+                        <span className="text-gray-400">Net:</span>
+                        <span className={monthData.net >= 0 ? 'text-green-400' : 'text-red-400'}>
+                          ${monthData.net.toLocaleString()}
                         </span>
-                      </td>
-                      <td className="py-3 px-4 text-gray-200 text-sm capitalize">
-                        {transaction.category}
-                      </td>
-                      <td className="py-3 px-4 text-gray-200 text-sm">
-                        {transaction.description}
-                      </td>
-                      <td className={`py-3 px-4 text-right text-sm font-semibold ${
-                        transaction.type === 'income' ? 'text-green-400' : 'text-red-400'
-                      }`}>
-                        ${parseFloat(transaction.amount).toLocaleString()}
-                      </td>
-                      <td className="py-3 px-4 text-center">
-                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
-                          <EditTransactionDialog transaction={transaction} />
-                          <button 
-                            onClick={() => {
-                              if (confirm(`Are you sure you want to delete this transaction: ${transaction.description}? This action cannot be undone.`)) {
-                                deleteTransaction(transaction.id);
-                              }
-                            }}
-                            style={{
-                              backgroundColor: 'transparent',
-                              border: 'none',
-                              cursor: loadingStates.deleteTransaction[transaction.id] ? 'not-allowed' : 'pointer',
-                              padding: '6px',
-                              borderRadius: '4px',
-                              display: 'inline-flex',
-                              alignItems: 'center',
-                              justifyContent: 'center'
-                            }}
-                            disabled={loadingStates.deleteTransaction[transaction.id]}
-                            onMouseOver={(e) => !loadingStates.deleteTransaction[transaction.id] && (e.currentTarget.style.backgroundColor = '#333')}
-                            onMouseOut={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
-                          >
-                            {loadingStates.deleteTransaction[transaction.id] ? (
-                              <LoadingSpinner size={16} />
-                            ) : (
-                              <Trash2 style={{ width: '16px', height: '16px', color: '#ef4444' }} />
-                            )}
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-              {transactions.length === 0 && (
-                <div className="text-center py-12 text-gray-400 text-sm bg-[#1a1a1a] rounded-md mt-4">
-                  <div className="flex flex-col items-center">
-                    <DollarSign className="h-12 w-12 text-gray-600 mb-3 opacity-50" />
-                    <p>No transactions yet. Add your first transaction above!</p>
-                  </div>
-                </div>
-              )}
-            </div>
-          )}
-        </div>
-      </div>
-    );
-  }
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              );
+            })}
+          </div>
+        </CardContent>
+      </Card>
+    </div>
+  );
 
-  const EditTransactionDialog = ({ transaction }) => {
-    const [open, setOpen] = useState(false);
-    const transactionForm = useForm({
-      resolver: zodResolver(transactionSchema),
-      defaultValues: {
-        type: transaction.type,
-        category: transaction.category,
-        amount: transaction.amount.toString(),
-        description: transaction.description,
-        date: new Date(transaction.date),
-      },
-    });
-
-    const onSubmit = async (data) => {
-      console.log("Submitting edited transaction:", { ...data, id: transaction.id });
-      const success = await editTransaction({ ...data, id: transaction.id });
-      if (success) {
-        setOpen(false);
-      }
-    };
-
-    const transactionType = transactionForm.watch('type');
-    const currentCategories = transactionType === 'income' ? incomeCategories : expenseCategories;
-
-    // Reset form when dialog opens
-    useEffect(() => {
-      if (open) {
-        console.log("Dialog opened, resetting form with data:", transaction);
-        transactionForm.reset({
-          type: transaction.type,
-          category: transaction.category,
-          amount: transaction.amount.toString(),
-          description: transaction.description,
-          date: new Date(transaction.date),
-        });
-      }
-    }, [open, transaction, transactionForm]);
-    
-    // Update category when type changes
-    useEffect(() => {
-      const currentCategory = transactionForm.getValues("category");
-      if (!currentCategories.includes(currentCategory)) {
-        transactionForm.setValue('category', currentCategories[0]);
-      }
-    }, [transactionType, currentCategories, transactionForm]);
-
-    return (
-      <Dialog open={open} onOpenChange={setOpen}>
-        <DialogTrigger asChild>
-          <button 
-            style={{
-              backgroundColor: 'transparent',
-              border: 'none',
-              cursor: 'pointer',
-              padding: '6px',
-              borderRadius: '4px',
-              display: 'inline-flex',
-              alignItems: 'center',
-              justifyContent: 'center'
-            }} 
-            onMouseOver={(e) => e.currentTarget.style.backgroundColor = '#333'}
-            onMouseOut={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
-          >
-            <Edit style={{ width: '16px', height: '16px', color: '#3b82f6' }} />
-          </button>
-        </DialogTrigger>
-        <DialogContent style={{
-          backgroundColor: '#2a2a2a',
-          border: '1px solid #3a3a3a', 
-          color: 'white',
-          padding: '24px',
-          borderRadius: '8px',
-          maxWidth: '500px',
-          width: '95vw',
-          margin: '0 auto'
-        }}>
-          <DialogHeader>
-            <DialogTitle style={{ color: 'white', fontSize: '18px' }}>Edit Transaction</DialogTitle>
-            <DialogDescription style={{ color: '#9ca3af' }}>
-              Update the details of your transaction.
-            </DialogDescription>
-          </DialogHeader>
-          <div style={{ margin: '20px 0' }}>
-            <Form {...transactionForm}>
-              <form onSubmit={transactionForm.handleSubmit(onSubmit)} className="space-y-4">
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '16px' }}>
+  const Transactions = () => (
+    <div className="space-y-6">
+      <div className="flex justify-between items-center">
+        <h2 className="text-2xl font-bold text-gray-200">Transactions</h2>
+        <Popover>
+          <PopoverTrigger asChild>
+            <Button className="bg-blue-600 hover:bg-blue-700">
+              <Plus className="h-4 w-4 mr-2" />
+              Add Transaction
+            </Button>
+          </PopoverTrigger>
+          <PopoverContent className="w-80 bg-gray-800 border-gray-700" align="end">
+            <div className="space-y-4">
+              <div>
+                <h3 className="text-lg font-semibold text-gray-200">
+                  {editingTransaction ? 'Edit Transaction' : 'Add New Transaction'}
+                </h3>
+                <p className="text-sm text-gray-400">
+                  {editingTransaction ? 'Update transaction details' : 'Enter transaction details below'}
+                </p>
+              </div>
+              <Form {...transactionForm}>
+                <form onSubmit={transactionForm.handleSubmit(onSubmitTransaction)} className="space-y-4">
                   <FormField
                     control={transactionForm.control}
                     name="type"
                     render={({ field }) => (
                       <FormItem>
-                        <Select onValueChange={field.onChange} value={field.value}>
+                        <Select onValueChange={field.onChange} defaultValue={field.value}>
                           <FormControl>
-                            <SelectTrigger style={{ backgroundColor: '#1a1a1a', borderColor: '#3a3a3a', color: '#e5e7eb' }}>
-                              <SelectValue placeholder="Type" />
+                            <SelectTrigger className="bg-gray-700 border-gray-600">
+                              <SelectValue placeholder="Select type" />
                             </SelectTrigger>
                           </FormControl>
-                          <SelectContent style={{ backgroundColor: '#2a2a2a', borderColor: '#3a3a3a', color: '#e5e7eb' }}>
+                          <SelectContent className="bg-gray-700 border-gray-600">
                             <SelectItem value="expense">Expense</SelectItem>
                             <SelectItem value="income">Income</SelectItem>
                           </SelectContent>
                         </Select>
-                        <FormMessage style={{ color: '#ef4444', fontSize: '12px', marginTop: '4px' }} />
+                        <FormMessage />
                       </FormItem>
                     )}
                   />
+                  
                   <FormField
                     control={transactionForm.control}
                     name="category"
                     render={({ field }) => (
                       <FormItem>
-                        <Select onValueChange={field.onChange} value={field.value}>
+                        <Select onValueChange={field.onChange} value={field.value?.toString()}>
                           <FormControl>
-                            <SelectTrigger style={{ backgroundColor: '#1a1a1a', borderColor: '#3a3a3a', color: '#e5e7eb' }}>
-                              <SelectValue placeholder="Category" />
+                            <SelectTrigger className="bg-gray-700 border-gray-600">
+                              <SelectValue placeholder="Select category" />
                             </SelectTrigger>
                           </FormControl>
-                          <SelectContent style={{ backgroundColor: '#2a2a2a', borderColor: '#3a3a3a', color: '#e5e7eb' }}>
-                            {currentCategories.map(cat => (
-                              <SelectItem key={cat} value={cat} style={{ textTransform: 'capitalize' }}>
-                                {cat.charAt(0).toUpperCase() + cat.slice(1)}
+                          <SelectContent className="bg-gray-700 border-gray-600">
+                            {(transactionForm.watch('type') === 'income' ? categories.income : categories.expense).map((cat) => (
+                              <SelectItem key={cat.id} value={cat.id.toString()}>
+                                {cat.name}
                               </SelectItem>
                             ))}
                           </SelectContent>
                         </Select>
-                        <FormMessage style={{ color: '#ef4444', fontSize: '12px', marginTop: '4px' }} />
+                        <FormMessage />
                       </FormItem>
                     )}
                   />
+
                   <FormField
                     control={transactionForm.control}
                     name="amount"
@@ -1522,421 +952,312 @@ const PersonalFinanceTracker = () => {
                       <FormItem>
                         <FormControl>
                           <Input 
-                            type="number" 
                             placeholder="Amount" 
-                            style={{ backgroundColor: '#1a1a1a', borderColor: '#3a3a3a', color: '#e5e7eb' }} 
+                            type="number" 
+                            step="0.01"
+                            className="bg-gray-700 border-gray-600" 
                             {...field} 
                           />
                         </FormControl>
-                        <FormMessage style={{ color: '#ef4444', fontSize: '12px', marginTop: '4px' }} />
+                        <FormMessage />
                       </FormItem>
                     )}
                   />
+
+                  <FormField
+                    control={transactionForm.control}
+                    name="description"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormControl>
+                          <Input 
+                            placeholder="Description" 
+                            className="bg-gray-700 border-gray-600" 
+                            {...field} 
+                          />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+
                   <FormField
                     control={transactionForm.control}
                     name="date"
                     render={({ field }) => (
-                      <FormItem>
+                      <FormItem className="flex flex-col">
                         <Popover>
                           <PopoverTrigger asChild>
                             <FormControl>
                               <Button
                                 variant={"outline"}
-                                style={{ 
-                                  backgroundColor: '#1a1a1a', 
-                                  borderColor: '#3a3a3a', 
-                                  color: field.value ? '#e5e7eb' : '#6b7280',
-                                  width: '100%',
-                                  display: 'flex',
-                                  justifyContent: 'flex-start',
-                                  textAlign: 'left'
-                                }}
+                                className={cn(
+                                  "w-full pl-3 text-left font-normal bg-gray-700 border-gray-600",
+                                  !field.value && "text-muted-foreground"
+                                )}
                               >
-                                <CalendarIcon style={{ width: '16px', height: '16px', marginRight: '8px' }} />
                                 {field.value ? (
                                   format(field.value, "PPP")
                                 ) : (
                                   <span>Pick a date</span>
                                 )}
+                                <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
                               </Button>
                             </FormControl>
                           </PopoverTrigger>
-                          <PopoverContent style={{ 
-                            width: 'auto', 
-                            padding: 0, 
-                            backgroundColor: '#2a2a2a', 
-                            borderColor: '#3a3a3a' 
-                          }} align="start">
+                          <PopoverContent className="w-auto p-0 bg-gray-800 border-gray-700" align="start">
                             <Calendar
                               mode="single"
                               selected={field.value}
                               onSelect={field.onChange}
+                              disabled={(date) =>
+                                date > new Date() || date < new Date("1900-01-01")
+                              }
                               initialFocus
-                              style={{ backgroundColor: '#2a2a2a' }}
                             />
                           </PopoverContent>
                         </Popover>
-                        <FormMessage style={{ color: '#ef4444', fontSize: '12px', marginTop: '4px' }} />
+                        <FormMessage />
                       </FormItem>
                     )}
                   />
-                </div>
-                <FormField
-                  control={transactionForm.control}
-                  name="description"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormControl>
-                        <Input 
-                          placeholder="Description" 
-                          style={{ backgroundColor: '#1a1a1a', borderColor: '#3a3a3a', color: '#e5e7eb' }} 
-                          {...field} 
-                        />
-                      </FormControl>
-                      <FormMessage style={{ color: '#ef4444', fontSize: '12px', marginTop: '4px' }} />
-                    </FormItem>
-                  )}
-                />
-                <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px', marginTop: '20px' }}>
-                  <Button 
-                    type="button" 
-                    onClick={() => setOpen(false)}
-                    style={{
-                      backgroundColor: '#3a3a3a',
-                      color: 'white',
-                      border: 'none',
-                      padding: '8px 16px',
-                      borderRadius: '6px',
-                      cursor: 'pointer'
-                    }}
-                  >
-                    Cancel
-                  </Button>
-                  <Button 
-                    type="submit" 
-                    disabled={loadingStates.editTransaction}
-                    style={{
-                      backgroundColor: '#3b82f6',
-                      color: 'white',
-                      border: 'none',
-                      padding: '8px 16px',
-                      borderRadius: '6px',
-                      cursor: loadingStates.editTransaction ? 'not-allowed' : 'pointer',
-                      opacity: loadingStates.editTransaction ? 0.7 : 1
-                    }}
-                  >
-                    {loadingStates.editTransaction ? (
-                      <>
-                        <LoadingSpinner size={16} />
-                        <span style={{ marginLeft: '8px' }}>Saving...</span>
-                      </>
-                    ) : (
-                      'Save Changes'
+
+                  <div className="flex gap-2 pt-2">
+                    {editingTransaction && (
+                      <Button type="button" variant="outline" onClick={cancelEdit} className="flex-1">
+                        Cancel
+                      </Button>
                     )}
-                  </Button>
-                </div>
-              </form>
-            </Form>
-          </div>
-        </DialogContent>
-      </Dialog>
-    );
-  };
+                    <Button 
+                      type="submit" 
+                      disabled={loadingStates.addTransaction || loadingStates.editTransaction}
+                      className="bg-blue-600 hover:bg-blue-700 flex-1"
+                    >
+                      {loadingStates.addTransaction || loadingStates.editTransaction ? (
+                        <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                      ) : (
+                        <Plus className="h-4 w-4 mr-2" />
+                      )}
+                      {editingTransaction ? 'Update' : 'Add'}
+                    </Button>
+                  </div>
+                </form>
+              </Form>
+            </div>
+          </PopoverContent>
+        </Popover>
+      </div>
 
-  // Smart Budgeting Component  
-  // Analytics Component with Smart Insights
-  const Analytics = () => {
-    const getSpendingInsights = () => {
-      const insights = [];
-      const currentMonth = new Date().getMonth();
-      const currentMonthData = yearlyData[currentMonth];
-      const lastMonthData = yearlyData[currentMonth - 1] || yearlyData[11];
-      
-      if (currentMonthData && lastMonthData) {
-        const expenseChange = ((currentMonthData.expenses - lastMonthData.expenses) / lastMonthData.expenses) * 100;
-        if (expenseChange > 20) {
-          insights.push({
-            type: 'warning',
-            title: 'High Spending Alert',
-            message: `Your expenses increased by ${expenseChange.toFixed(1)}% compared to last month.`,
-            icon: AlertCircle
-          });
-        } else if (expenseChange < -10) {
-          insights.push({
-            type: 'success',
-            title: 'Great Savings!',
-            message: `You reduced expenses by ${Math.abs(expenseChange).toFixed(1)}% this month.`,
-            icon: CheckCircle
-          });
-        }
-      }
-
-      // Category-based insights
-      const categoryTotals = transactions.reduce((acc, t) => {
-        if (t.type === 'expense') {
-          acc[t.category] = (acc[t.category] || 0) + parseFloat(t.amount);
-        }
-        return acc;
-      }, {});
-
-      const topCategory = Object.entries(categoryTotals).sort(([,a], [,b]) => b - a)[0];
-      if (topCategory && topCategory[1] > 1000) {
-        insights.push({
-          type: 'info',
-          title: 'Top Spending Category',
-          message: `You spent $${topCategory[1].toLocaleString()} on ${topCategory[0]} this period.`,
-          icon: Info
-        });
-      }
-
-      return insights;
-    };
-
-    const insights = getSpendingInsights();
-
-    return (
-      <div style={{ padding: '24px', maxWidth: '1200px', margin: '0 auto' }}>
-        {/* Export/Import Section */}
-        <div style={{ 
-          backgroundColor: '#2a2a2a', 
-          borderRadius: '12px', 
-          padding: '20px', 
-          marginBottom: '24px', 
-          border: '1px solid #3a3a3a'
-        }}>
-          <h3 style={{ color: '#e5e7eb', fontSize: '18px', fontWeight: '600', marginBottom: '16px', display: 'flex', alignItems: 'center' }}>
-            <Archive style={{ width: '20px', height: '20px', color: '#3b82f6', marginRight: '8px' }} />
-            Data Management
-          </h3>
-          <div style={{ display: 'flex', gap: '16px', flexWrap: 'wrap' }}>
-            <Button 
-              onClick={exportToCSV}
-              style={{
-                backgroundColor: '#10b981',
-                color: 'white',
-                border: 'none',
-                padding: '8px 16px',
-                borderRadius: '6px',
-                display: 'flex',
-                alignItems: 'center',
-                gap: '8px'
-              }}
-            >
-              <Download style={{ width: '16px', height: '16px' }} />
-              Export to CSV
-            </Button>
-            <label style={{
-              backgroundColor: '#3b82f6',
-              color: 'white',
-              border: 'none',
-              padding: '8px 16px',
-              borderRadius: '6px',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '8px',
-              cursor: 'pointer'
-            }}>
-              <Upload style={{ width: '16px', height: '16px' }} />
-              Import CSV
-              <input 
-                type="file" 
-                accept=".csv" 
-                onChange={(e) => e.target.files[0] && importFromCSV(e.target.files[0])}
-                style={{ display: 'none' }}
-              />
-            </label>
-          </div>
+      {/* Transactions List */}
+      {loadingStates.transactions ? (
+        <div className="flex justify-center py-8">
+          <Loader2 className="h-8 w-8 animate-spin text-blue-400" />
         </div>
-
-        {/* Smart Insights */}
-        <div style={{ 
-          backgroundColor: '#2a2a2a', 
-          borderRadius: '12px', 
-          padding: '20px', 
-          marginBottom: '24px', 
-          border: '1px solid #3a3a3a'
-        }}>
-          <h3 style={{ color: '#e5e7eb', fontSize: '18px', fontWeight: '600', marginBottom: '16px', display: 'flex', alignItems: 'center' }}>
-            <Lightbulb style={{ width: '20px', height: '20px', color: '#f59e0b', marginRight: '8px' }} />
-            Smart Insights
-          </h3>
-          <div style={{ display: 'grid', gap: '12px' }}>
-            {insights.length > 0 ? insights.map((insight, index) => (
-              <div key={index} style={{
-                backgroundColor: '#1a1a1a',
-                border: `1px solid ${insight.type === 'warning' ? '#ef4444' : insight.type === 'success' ? '#10b981' : '#3b82f6'}`,
-                borderRadius: '8px',
-                padding: '16px',
-                display: 'flex',
-                alignItems: 'flex-start',
-                gap: '12px'
-              }}>
-                <insight.icon style={{ 
-                  width: '20px', 
-                  height: '20px', 
-                  color: insight.type === 'warning' ? '#ef4444' : insight.type === 'success' ? '#10b981' : '#3b82f6',
-                  marginTop: '2px'
-                }} />
-                <div>
-                  <h4 style={{ 
-                    color: '#e5e7eb', 
-                    fontSize: '14px', 
-                    fontWeight: '600', 
-                    marginBottom: '4px' 
-                  }}>
-                    {insight.title}
-                  </h4>
-                  <p style={{ color: '#9ca3af', fontSize: '13px', margin: 0 }}>
-                    {insight.message}
-                  </p>
-                </div>
-              </div>
-            )) : (
-              <div style={{
-                backgroundColor: '#1a1a1a',
-                borderRadius: '8px',
-                padding: '20px',
-                textAlign: 'center',
-                color: '#6b7280'
-              }}>
-                <Info style={{ width: '24px', height: '24px', margin: '0 auto 8px', opacity: 0.5 }} />
-                <p>Add more transactions to see personalized insights</p>
-              </div>
-            )}
-          </div>
-        </div>
-
-        {/* Detailed Charts */}
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(400px, 1fr))', gap: '24px' }}>
-          {/* Monthly Trend */}
-          <div style={{ 
-            backgroundColor: '#2a2a2a', 
-            borderRadius: '12px', 
-            padding: '20px', 
-            border: '1px solid #3a3a3a'
-          }}>
-            <h3 style={{ color: '#e5e7eb', fontSize: '16px', fontWeight: '600', marginBottom: '16px' }}>
-              Monthly Trend Analysis
-            </h3>
-            <ResponsiveContainer width="100%" height={250}>
-              <LineChart data={yearlyData}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#3a3a3a" />
-                <XAxis dataKey="month" stroke="#9ca3af" fontSize={12} />
-                <YAxis stroke="#9ca3af" fontSize={12} />
-                <Tooltip 
-                  contentStyle={{ 
-                    backgroundColor: '#1a1a1a', 
-                    border: '1px solid #3a3a3a',
-                    borderRadius: '8px',
-                    color: '#e5e7eb'
-                  }} 
-                />
-                <Line type="monotone" dataKey="income" stroke="#10b981" strokeWidth={2} />
-                <Line type="monotone" dataKey="expenses" stroke="#ef4444" strokeWidth={2} />
-                <Line type="monotone" dataKey="net" stroke="#3b82f6" strokeWidth={2} />
-              </LineChart>
-            </ResponsiveContainer>
-          </div>
-
-          {/* Category Breakdown */}
-          <div style={{ 
-            backgroundColor: '#2a2a2a', 
-            borderRadius: '12px', 
-            padding: '20px', 
-            border: '1px solid #3a3a3a'
-          }}>
-            <h3 style={{ color: '#e5e7eb', fontSize: '16px', fontWeight: '600', marginBottom: '16px' }}>
-              Expense Categories
-            </h3>
-            <ResponsiveContainer width="100%" height={250}>
-              <PieChart>
-                <Pie
-                  data={Object.entries(dashboardData.expense_breakdown).map(([key, value]) => ({
-                    name: key.charAt(0).toUpperCase() + key.slice(1),
-                    value
-                  }))}
-                  cx="50%"
-                  cy="50%"
-                  outerRadius={80}
-                  fill="#8884d8"
-                  dataKey="value"
-                  label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
+      ) : transactions.length > 0 ? (
+        <Card className="bg-gray-800/50 backdrop-blur-sm border-gray-700/50">
+          <CardContent className="p-6">
+            <div className="space-y-4">
+              {transactions.map((transaction) => (
+                <Card 
+                  key={transaction.id}
+                  className="bg-gray-700/50 border-gray-600/50 hover:bg-gray-700/70 transition-all duration-200"
                 >
-                  {Object.entries(dashboardData.expense_breakdown).map((entry, index) => (
-                    <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                  ))}
-                </Pie>
-                <Tooltip 
-                  contentStyle={{ 
-                    backgroundColor: '#1a1a1a', 
-                    border: '1px solid #3a3a3a',
-                    borderRadius: '8px',
-                    color: '#e5e7eb'
-                  }} 
-                />
-              </PieChart>
-            </ResponsiveContainer>
+                  <CardContent className="p-4">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center space-x-4">
+                        <div className={`w-3 h-3 rounded-full ${
+                          transaction.type === 'income' ? 'bg-green-400' : 'bg-red-400'
+                        }`} />
+                        <div>
+                          <p className="font-medium text-gray-200">{transaction.description}</p>
+                          <p className="text-sm text-gray-400">
+                            {transaction.category_name || transaction.category} • {transaction.date}
+                          </p>
+                        </div>
+                      </div>
+                      <div className="flex items-center space-x-3">
+                        <div className={`text-lg font-semibold ${
+                          transaction.type === 'income' ? 'text-green-400' : 'text-red-400'
+                        }`}>
+                          {transaction.type === 'income' ? '+' : '-'}${transaction.amount}
+                        </div>
+                        <div className="flex space-x-2">
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => editTransaction(transaction)}
+                            className="h-8 w-8 p-0"
+                          >
+                            <Edit className="h-4 w-4" />
+                          </Button>
+                          <AlertDialog>
+                            <AlertDialogTrigger asChild>
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                className="h-8 w-8 p-0 border-red-600 text-red-400 hover:bg-red-600/10"
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </Button>
+                            </AlertDialogTrigger>
+                            <AlertDialogContent className="bg-gray-800 border-gray-700">
+                              <AlertDialogHeader>
+                                <AlertDialogTitle className="text-gray-200">Delete Transaction</AlertDialogTitle>
+                                <AlertDialogDescription className="text-gray-400">
+                                  Are you sure you want to delete this transaction? This action cannot be undone.
+                                </AlertDialogDescription>
+                        </AlertDialogHeader>
+                        <AlertDialogFooter>
+                          <AlertDialogCancel className="bg-gray-700 border-gray-600 text-gray-200">Cancel</AlertDialogCancel>
+                          <AlertDialogAction
+                            onClick={() => deleteTransaction(transaction.id)}
+                            disabled={loadingStates.deleteTransaction[transaction.id]}
+                            className="bg-red-600 hover:bg-red-700"
+                          >
+                            {loadingStates.deleteTransaction[transaction.id] ? (
+                              <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                            ) : null}
+                            Delete
+                          </AlertDialogAction>
+                        </AlertDialogFooter>
+                      </AlertDialogContent>
+                    </AlertDialog>
+                  </div>
+                </div>
+                    </div>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      </CardContent>
+    </Card>
+      ) : (
+        <div className="text-center py-12">
+          <Activity className="h-16 w-16 text-gray-400 mx-auto mb-4" />
+          <p className="text-xl text-gray-400">No transactions yet</p>
+          <p className="text-gray-500 mt-2">Start by adding your first transaction</p>
+        </div>
+      )}
+    </div>
+  );
+
+  const Analytics = () => (
+    <div className="space-y-6">
+      <h2 className="text-2xl font-bold text-gray-200">Analytics</h2>
+      
+      {/* Yearly Overview Chart */}
+      <div className="bg-gray-800/50 backdrop-blur-sm rounded-xl p-6 border border-gray-700/50">
+        <div className="flex items-center justify-between mb-6">
+          <h3 className="text-lg font-semibold text-gray-200">Yearly Overview</h3>
+          <div className="flex gap-2">
+            {['all', 'Q1', 'Q2', 'Q3', 'Q4'].map((quarter) => (
+              <Button
+                key={quarter}
+                variant={quarterFilter === quarter ? 'default' : 'outline'}
+                size="sm"
+                onClick={() => setQuarterFilter(quarter)}
+                className="h-8 px-3 text-xs"
+              >
+                {quarter === 'all' ? 'All' : quarter}
+              </Button>
+            ))}
+          </div>
+        </div>
+        
+        <div className="h-80">
+          <ResponsiveContainer width="100%" height="100%">
+            <BarChart data={getFilteredMonths()}>
+              <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
+              <XAxis 
+                dataKey="month" 
+                stroke="#9ca3af" 
+                fontSize={12}
+                angle={-45}
+                textAnchor="end"
+                height={60}
+              />
+              <YAxis 
+                stroke="#9ca3af" 
+                fontSize={12}
+                tickFormatter={(value) => `$${value/1000}K`}
+              />
+              <Tooltip 
+                contentStyle={{ 
+                  backgroundColor: '#1f2937', 
+                  border: '1px solid #374151',
+                  borderRadius: '8px',
+                  color: '#e5e7eb'
+                }}
+                formatter={(value) => [`$${value.toLocaleString()}`, '']}
+              />
+              <Bar dataKey="income" fill="#10b981" name="Income" />
+              <Bar dataKey="expenses" fill="#ef4444" name="Expenses" />
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
+      </div>
+
+      {/* Income vs Expenses Comparison */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <div className="bg-gray-800/50 backdrop-blur-sm rounded-xl p-6 border border-gray-700/50">
+          <h3 className="text-lg font-semibold text-gray-200 mb-4">Income Sources</h3>
+          <div className="space-y-3">
+            {getActualIncomeBreakdown().map((item, index) => (
+              <div key={item.name} className="flex items-center justify-between">
+                <div className="flex items-center">
+                  <div 
+                    className="w-4 h-4 rounded-full mr-3" 
+                    style={{ backgroundColor: COLORS[index % COLORS.length] }}
+                  />
+                  <span className="text-gray-300">{item.name}</span>
+                </div>
+                <span className="text-green-400 font-medium">${item.value.toLocaleString()}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <div className="bg-gray-800/50 backdrop-blur-sm rounded-xl p-6 border border-gray-700/50">
+          <h3 className="text-lg font-semibold text-gray-200 mb-4">Expense Categories</h3>
+          <div className="space-y-3">
+            {getActualExpenseBreakdown().map((item, index) => (
+              <div key={item.name} className="flex items-center justify-between">
+                <div className="flex items-center">
+                  <div 
+                    className="w-4 h-4 rounded-full mr-3" 
+                    style={{ backgroundColor: COLORS[index % COLORS.length] }}
+                  />
+                  <span className="text-gray-300">{item.name}</span>
+                </div>
+                <span className="text-red-400 font-medium">${item.value.toLocaleString()}</span>
+              </div>
+            ))}
           </div>
         </div>
       </div>
-    );
-  };
+    </div>
+  );
 
-  // Goals Component
-  const Goals = () => {
-    const goalForm = useForm({
-      resolver: zodResolver(goalSchema),
-      defaultValues: {
-        name: '',
-        target_amount: '',
-        current_amount: 0,
-        target_date: new Date(),
-        description: '',
-      },
-    });
-
-    const onSubmitGoal = async (data) => {
-      const success = await addGoal(data);
-      if (success) {
-        goalForm.reset({
-          name: '',
-          target_amount: '',
-          current_amount: 0,
-          target_date: new Date(),
-          description: '',
-        });
-      }
-    };
-
-    const calculateProgress = (current, target) => {
-      return Math.min((current / target) * 100, 100);
-    };
-
-    const getDaysRemaining = (targetDate) => {
-      const today = new Date();
-      const target = new Date(targetDate);
-      const diffTime = target - today;
-      const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-      return diffDays;
-    };
-
-    return (
-      <div style={{ padding: '24px', maxWidth: '1200px', margin: '0 auto' }}>
-        {/* Add Goal Form */}
-        <div style={{ 
-          backgroundColor: '#2a2a2a', 
-          borderRadius: '12px', 
-          padding: '20px', 
-          marginBottom: '24px', 
-          border: '1px solid #3a3a3a'
-        }}>
-          <h3 style={{ color: '#e5e7eb', fontSize: '18px', fontWeight: '600', marginBottom: '16px', display: 'flex', alignItems: 'center' }}>
-            <Target style={{ width: '20px', height: '20px', color: '#3b82f6', marginRight: '8px' }} />
-            Add New Goal
-          </h3>
-          <Form {...goalForm}>
-            <form onSubmit={goalForm.handleSubmit(onSubmitGoal)} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '16px' }}>
+  const Goals = () => (
+    <div className="space-y-6">
+      <div className="flex justify-between items-center">
+        <h2 className="text-2xl font-bold text-gray-200">Financial Goals</h2>
+        <Dialog>
+          <DialogTrigger asChild>
+            <Button className="bg-green-600 hover:bg-green-700">
+              <Target className="h-4 w-4 mr-2" />
+              Add Goal
+            </Button>
+          </DialogTrigger>
+          <DialogContent className="bg-gray-800 border-gray-700">
+            <DialogHeader>
+              <DialogTitle className="text-gray-200">Add New Goal</DialogTitle>
+              <DialogDescription className="text-gray-400">
+                Set a financial goal to track your progress
+              </DialogDescription>
+            </DialogHeader>
+            <Form {...goalForm}>
+              <form onSubmit={goalForm.handleSubmit(onSubmitGoal)} className="space-y-4">
                 <FormField
                   control={goalForm.control}
                   name="name"
@@ -1944,20 +1265,16 @@ const PersonalFinanceTracker = () => {
                     <FormItem>
                       <FormControl>
                         <Input 
-                          placeholder="Goal name (e.g., Vacation Fund)" 
-                          style={{ 
-                            backgroundColor: '#1a1a1a', 
-                            borderColor: '#3a3a3a', 
-                            color: '#e5e7eb',
-                            height: '38px'
-                          }} 
+                          placeholder="Goal name (e.g., Emergency Fund)" 
+                          className="bg-gray-700 border-gray-600" 
                           {...field} 
                         />
                       </FormControl>
-                      <FormMessage style={{ color: '#ef4444', fontSize: '12px', marginTop: '4px' }} />
+                      <FormMessage />
                     </FormItem>
                   )}
                 />
+
                 <FormField
                   control={goalForm.control}
                   name="target_amount"
@@ -1965,21 +1282,18 @@ const PersonalFinanceTracker = () => {
                     <FormItem>
                       <FormControl>
                         <Input 
-                          type="number" 
                           placeholder="Target amount" 
-                          style={{ 
-                            backgroundColor: '#1a1a1a', 
-                            borderColor: '#3a3a3a', 
-                            color: '#e5e7eb',
-                            height: '38px'
-                          }} 
+                          type="number" 
+                          step="0.01"
+                          className="bg-gray-700 border-gray-600" 
                           {...field} 
                         />
                       </FormControl>
-                      <FormMessage style={{ color: '#ef4444', fontSize: '12px', marginTop: '4px' }} />
+                      <FormMessage />
                     </FormItem>
                   )}
                 />
+
                 <FormField
                   control={goalForm.control}
                   name="current_amount"
@@ -1987,506 +1301,329 @@ const PersonalFinanceTracker = () => {
                     <FormItem>
                       <FormControl>
                         <Input 
+                          placeholder="Current amount (optional)" 
                           type="number" 
-                          placeholder="Current amount" 
-                          style={{ 
-                            backgroundColor: '#1a1a1a', 
-                            borderColor: '#3a3a3a', 
-                            color: '#e5e7eb',
-                            height: '38px'
-                          }} 
+                          step="0.01"
+                          className="bg-gray-700 border-gray-600" 
                           {...field} 
                         />
                       </FormControl>
-                      <FormMessage style={{ color: '#ef4444', fontSize: '12px', marginTop: '4px' }} />
+                      <FormMessage />
                     </FormItem>
                   )}
                 />
+
                 <FormField
                   control={goalForm.control}
                   name="target_date"
                   render={({ field }) => (
-                    <FormItem>
+                    <FormItem className="flex flex-col">
                       <Popover>
                         <PopoverTrigger asChild>
                           <FormControl>
                             <Button
                               variant={"outline"}
-                              style={{
-                                backgroundColor: '#1a1a1a', 
-                                borderColor: '#3a3a3a', 
-                                color: field.value ? '#e5e7eb' : '#6b7280',
-                                width: '100%',
-                                height: '38px',
-                                display: 'flex',
-                                justifyContent: 'flex-start',
-                                textAlign: 'left'
-                              }}
+                              className={cn(
+                                "w-full pl-3 text-left font-normal bg-gray-700 border-gray-600",
+                                !field.value && "text-muted-foreground"
+                              )}
                             >
-                              <CalendarIcon style={{ width: '16px', height: '16px', marginRight: '8px', color: '#3b82f6' }} />
-                              {field.value ? format(field.value, "PPP") : <span>Target date</span>}
+                              {field.value ? (
+                                format(field.value, "PPP")
+                              ) : (
+                                <span>Pick target date</span>
+                              )}
+                              <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
                             </Button>
                           </FormControl>
                         </PopoverTrigger>
-                        <PopoverContent style={{ 
-                          width: 'auto', 
-                          padding: 0, 
-                          backgroundColor: '#2a2a2a', 
-                          borderColor: '#3a3a3a' 
-                        }} align="start">
+                        <PopoverContent className="w-auto p-0 bg-gray-800 border-gray-700" align="start">
                           <Calendar
                             mode="single"
                             selected={field.value}
                             onSelect={field.onChange}
+                            disabled={(date) => date < new Date()}
                             initialFocus
                           />
                         </PopoverContent>
                       </Popover>
-                      <FormMessage style={{ color: '#ef4444', fontSize: '12px', marginTop: '4px' }} />
+                      <FormMessage />
                     </FormItem>
                   )}
                 />
-              </div>
+
+                <FormField
+                  control={goalForm.control}
+                  name="description"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormControl>
+                        <Input 
+                          placeholder="Description (optional)" 
+                          className="bg-gray-700 border-gray-600" 
+                          {...field} 
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <DialogFooter>
+                  <Button 
+                    type="submit" 
+                    disabled={loadingStates.addGoal}
+                    className="bg-green-600 hover:bg-green-700"
+                  >
+                    {loadingStates.addGoal ? (
+                      <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                    ) : (
+                      <Target className="h-4 w-4 mr-2" />
+                    )}
+                    Add Goal
+                  </Button>
+                </DialogFooter>
+              </form>
+            </Form>
+          </DialogContent>
+        </Dialog>
+      </div>
+
+      {/* Goals List */}
+      {goals.length > 0 ? (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {goals.map((goal) => {
+            const progress = (goal.current_amount / goal.target_amount) * 100;
+            const isCompleted = progress >= 100;
+            
+            return (
+              <Card 
+                key={goal.id}
+                className="bg-gray-800/50 backdrop-blur-sm border-gray-700/50 hover:border-green-500/30 transition-all duration-300"
+              >
+                <CardContent className="p-6">
+                  <div className="flex justify-between items-start mb-4">
+                    <div>
+                      <h3 className="text-lg font-semibold text-gray-200">{goal.name}</h3>
+                      {goal.description && (
+                        <p className="text-sm text-gray-400 mt-1">{goal.description}</p>
+                      )}
+                    </div>
+                    <AlertDialog>
+                      <AlertDialogTrigger asChild>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="h-8 w-8 p-0 border-red-600 text-red-400 hover:bg-red-600/10"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </AlertDialogTrigger>
+                      <AlertDialogContent className="bg-gray-800 border-gray-700">
+                        <AlertDialogHeader>
+                          <AlertDialogTitle className="text-gray-200">Delete Goal</AlertDialogTitle>
+                          <AlertDialogDescription className="text-gray-400">
+                            Are you sure you want to delete this goal? This action cannot be undone.
+                          </AlertDialogDescription>
+                        </AlertDialogHeader>
+                        <AlertDialogFooter>
+                          <AlertDialogCancel className="bg-gray-700 border-gray-600 text-gray-200">Cancel</AlertDialogCancel>
+                          <AlertDialogAction
+                            onClick={() => deleteGoal(goal.id)}
+                            disabled={loadingStates.deleteGoal}
+                            className="bg-red-600 hover:bg-red-700"
+                          >
+                            {loadingStates.deleteGoal ? (
+                              <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                            ) : null}
+                            Delete
+                          </AlertDialogAction>
+                        </AlertDialogFooter>
+                    </AlertDialogContent>
+                  </AlertDialog>
+                </div>
+
+                <div className="space-y-3">
+                  <div className="flex justify-between text-sm">
+                    <span className="text-gray-400">Progress</span>
+                    <span className={isCompleted ? "text-green-400" : "text-gray-300"}>
+                      {progress.toFixed(1)}%
+                    </span>
+                  </div>
+                  
+                  <div className="w-full bg-gray-700 rounded-full h-2">
+                    <div 
+                      className={`h-2 rounded-full transition-all duration-300 ${
+                        isCompleted ? 'bg-green-400' : 'bg-blue-500'
+                      }`}
+                      style={{ width: `${Math.min(progress, 100)}%` }}
+                    />
+                  </div>
+
+                  <div className="flex justify-between text-sm">
+                    <span className="text-gray-400">
+                      ${goal.current_amount.toLocaleString()} / ${goal.target_amount.toLocaleString()}
+                    </span>
+                    <span className="text-gray-400">
+                      Due: {format(new Date(goal.target_date), 'MMM dd, yyyy')}
+                    </span>
+                  </div>
+
+                  {!isCompleted && (
+                    <Dialog>
+                      <DialogTrigger asChild>
+                        <Button size="sm" className="w-full bg-blue-600 hover:bg-blue-700">
+                          Update Progress
+                        </Button>
+                      </DialogTrigger>
+                      <DialogContent className="bg-gray-800 border-gray-700">
+                        <DialogHeader>
+                          <DialogTitle className="text-gray-200">Update Goal Progress</DialogTitle>
+                          <DialogDescription className="text-gray-400">
+                            Update the current amount for {goal.name}
+                          </DialogDescription>
+                        </DialogHeader>
+                        <div className="space-y-4">
+                          <Input
+                            type="number"
+                            step="0.01"
+                            placeholder="Enter current amount"
+                            defaultValue={goal.current_amount}
+                            className="bg-gray-700 border-gray-600"
+                            id={`goal-${goal.id}`}
+                          />
+                        </div>
+                        <DialogFooter>
+                          <DialogClose asChild>
+                            <Button
+                              onClick={() => {
+                                const input = document.getElementById(`goal-${goal.id}`);
+                                const newAmount = parseFloat(input.value);
+                                if (!isNaN(newAmount)) {
+                                  updateGoalProgress(goal.id, newAmount);
+                                }
+                              }}
+                              disabled={loadingStates.updateGoal}
+                              className="bg-blue-600 hover:bg-blue-700"
+                            >
+                              {loadingStates.updateGoal ? (
+                                <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                              ) : null}
+                              Update
+                            </Button>
+                          </DialogClose>
+                        </DialogFooter>
+                      </DialogContent>
+                    </Dialog>
+                  )}
+
+                  {isCompleted && (
+                    <div className="flex items-center justify-center py-2">
+                      <CheckCircle className="h-5 w-5 text-green-400 mr-2" />
+                      <span className="text-green-400 font-medium">Goal Completed!</span>
+                    </div>
+                  )}
+                </div>
+              </CardContent>
+            </Card>
+            );
+          })}
+        </div>
+      ) : (
+        <div className="text-center py-12">
+          <Target className="h-16 w-16 text-gray-400 mx-auto mb-4" />
+          <p className="text-xl text-gray-400">No goals set yet</p>
+          <p className="text-gray-500 mt-2">Set your first financial goal to start tracking progress</p>
+        </div>
+      )}
+    </div>
+  );
+
+  const SmartBudgeting = () => (
+    <div className="space-y-6">
+      <h2 className="text-2xl font-bold text-gray-200">Smart Budgeting</h2>
+      
+      {/* Budget Setup */}
+      <div className="bg-gray-800/50 backdrop-blur-sm rounded-xl p-6 border border-gray-700/50">
+        <h3 className="text-lg font-semibold text-gray-200 mb-4">Monthly Budget Setup</h3>
+        <Form {...budgetForm}>
+          <form onSubmit={budgetForm.handleSubmit(updateBudget)} className="space-y-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <FormField
-                control={goalForm.control}
-                name="description"
+                control={budgetForm.control}
+                name="monthly_income"
                 render={({ field }) => (
                   <FormItem>
                     <FormControl>
                       <Input 
-                        placeholder="Description (optional)" 
-                        style={{ 
-                          backgroundColor: '#1a1a1a', 
-                          borderColor: '#3a3a3a', 
-                          color: '#e5e7eb',
-                          height: '38px'
-                        }} 
+                        placeholder="Monthly Income" 
+                        type="number" 
+                        step="0.01"
+                        className="bg-gray-700 border-gray-600" 
                         {...field} 
                       />
                     </FormControl>
-                    <FormMessage style={{ color: '#ef4444', fontSize: '12px', marginTop: '4px' }} />
+                    <FormMessage />
                   </FormItem>
                 )}
               />
               <Button 
                 type="submit" 
-                disabled={loadingStates.addGoal} 
-                style={{
-                  backgroundColor: '#3b82f6',
-                  color: 'white',
-                  border: 'none',
-                  padding: '0 16px',
-                  height: '38px',
-                  borderRadius: '6px',
-                  cursor: loadingStates.addGoal ? 'not-allowed' : 'pointer',
-                  opacity: loadingStates.addGoal ? 0.7 : 1,
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  gap: '8px',
-                  width: 'fit-content'
-                }}
+                disabled={loadingStates.updateBudget}
+                className="bg-blue-600 hover:bg-blue-700"
               >
-                {loadingStates.addGoal ? (
-                  <>
-                    <LoadingSpinner size={16} />
-                    <span>Adding...</span>
-                  </>
+                {loadingStates.updateBudget ? (
+                  <Loader2 className="h-4 w-4 animate-spin mr-2" />
                 ) : (
-                  <>
-                    <Plus style={{ width: '16px', height: '16px' }} />
-                    Add Goal
-                  </>
+                  <Calculator className="h-4 w-4 mr-2" />
                 )}
+                Update Budget
               </Button>
-            </form>
-          </Form>
-        </div>
-
-        {/* Goals List */}
-        <div style={{ display: 'grid', gap: '16px' }}>
-          {goals.length > 0 ? goals.map((goal) => {
-            const progress = calculateProgress(goal.current_amount, goal.target_amount);
-            const daysRemaining = getDaysRemaining(goal.target_date);
-            const isCompleted = progress >= 100;
-            
-            return (
-              <div key={goal.id} style={{
-                backgroundColor: '#2a2a2a',
-                borderRadius: '12px',
-                padding: '20px',
-                border: `1px solid ${isCompleted ? '#10b981' : '#3a3a3a'}`
-              }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '16px' }}>
-                  <div>
-                    <h4 style={{ color: '#e5e7eb', fontSize: '18px', fontWeight: '600', marginBottom: '4px', display: 'flex', alignItems: 'center' }}>
-                      {isCompleted && <Award style={{ width: '20px', height: '20px', color: '#10b981', marginRight: '8px' }} />}
-                      {goal.name}
-                    </h4>
-                    {goal.description && (
-                      <p style={{ color: '#9ca3af', fontSize: '14px', margin: 0 }}>{goal.description}</p>
-                    )}
-                  </div>
-                  <Button
-                    onClick={() => {
-                      if (confirm('Are you sure you want to delete this goal?')) {
-                        deleteGoal(goal.id);
-                      }
-                    }}
-                    style={{
-                      backgroundColor: 'transparent',
-                      border: '1px solid #ef4444',
-                      color: '#ef4444',
-                      padding: '4px 8px',
-                      borderRadius: '4px'
-                    }}
-                  >
-                    <Trash2 style={{ width: '14px', height: '14px' }} />
-                  </Button>
-                </div>
-                
-                <div style={{ marginBottom: '12px' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
-                    <span style={{ color: '#e5e7eb', fontSize: '14px', fontWeight: '500' }}>
-                      ${goal.current_amount.toLocaleString()} / ${goal.target_amount.toLocaleString()}
-                    </span>
-                    <span style={{ color: isCompleted ? '#10b981' : '#3b82f6', fontSize: '14px', fontWeight: '600' }}>
-                      {progress.toFixed(1)}%
-                    </span>
-                  </div>
-                  <div style={{
-                    width: '100%',
-                    height: '8px',
-                    backgroundColor: '#1a1a1a',
-                    borderRadius: '4px',
-                    overflow: 'hidden'
-                  }}>
-                    <div style={{
-                      width: `${progress}%`,
-                      height: '100%',
-                      backgroundColor: isCompleted ? '#10b981' : '#3b82f6',
-                      transition: 'width 0.3s ease'
-                    }} />
-                  </div>
-                </div>
-                
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <span style={{ color: '#9ca3af', fontSize: '12px' }}>
-                    {daysRemaining > 0 ? `${daysRemaining} days remaining` : 
-                     daysRemaining === 0 ? 'Due today' : 
-                     `${Math.abs(daysRemaining)} days overdue`}
-                  </span>
-                  <span style={{ color: '#9ca3af', fontSize: '12px' }}>
-                    Target: {format(new Date(goal.target_date), 'MMM dd, yyyy')}
-                  </span>
-                </div>
-              </div>
-            );
-          }) : (
-            <div style={{
-              backgroundColor: '#2a2a2a',
-              borderRadius: '12px',
-              padding: '40px',
-              textAlign: 'center',
-              border: '1px solid #3a3a3a'
-            }}>
-              <Target style={{ width: '48px', height: '48px', color: '#6b7280', margin: '0 auto 16px', opacity: 0.5 }} />
-              <h3 style={{ color: '#e5e7eb', fontSize: '18px', fontWeight: '600', marginBottom: '8px' }}>
-                No Goals Yet
-              </h3>
-              <p style={{ color: '#9ca3af', fontSize: '14px', margin: 0 }}>
-                Set your first financial goal to start tracking your progress
-              </p>
             </div>
-          )}
-        </div>
+          </form>
+        </Form>
       </div>
-    );
-  };
 
-  const SmartBudgeting = () => {
-    const budgetForm = useForm({
-      resolver: zodResolver(budgetSchema),
-      defaultValues: {
-        monthly_income: budgetData.monthly_income || '',
-      },
-    });
-
-    useEffect(() => {
-      if (budgetData.monthly_income) {
-        budgetForm.reset({ monthly_income: budgetData.monthly_income });
-      }
-    }, [budgetData.monthly_income, budgetForm]);
-
-    const onSubmit = (data) => {
-      handleBudgetSubmit(data);
-    };
-
-    const budgetComparison = budgetAnalysis ? [
-      {
-        category: 'Needs (50%)',
-        budgeted: budgetAnalysis.budget.needs_budget,
-        spent: budgetAnalysis.actual_spending.needs,
-        remaining: budgetAnalysis.budget.needs_budget - budgetAnalysis.actual_spending.needs
-      },
-      {
-        category: 'Wants (30%)',
-        budgeted: budgetAnalysis.budget.wants_budget,
-        spent: budgetAnalysis.actual_spending.wants,
-        remaining: budgetAnalysis.budget.wants_budget - budgetAnalysis.actual_spending.wants
-      },
-      {
-        category: 'Savings (20%)',
-        budgeted: budgetAnalysis.budget.savings_goal,
-        actual: budgetAnalysis.actual_spending.savings,
-        remaining: budgetAnalysis.actual_spending.savings - budgetAnalysis.budget.savings_goal
-      }
-    ] : [];
-
-    return (
-      <div style={{ backgroundColor: '#1a1a1a', minHeight: '100vh', padding: '24px' }}>
-        {/* Budget Setup */}
-        <div style={{ backgroundColor: '#2a2a2a', borderRadius: '12px', padding: '24px', marginBottom: '24px', border: '1px solid #3a3a3a' }}>
-          <h3 style={{ color: '#e5e7eb', fontSize: '18px', fontWeight: '600', marginBottom: '16px' }}>
-            🎯 Simple Budget Setup
-          </h3>
-          <p style={{ color: '#9ca3af', marginBottom: '16px', fontSize: '14px' }}>
-            Follow the 50/30/20 rule: 50% for needs, 30% for wants, 20% for savings and investments.
-          </p>
-          
-          <Form {...budgetForm}>
-            <form onSubmit={budgetForm.handleSubmit(onSubmit)}>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 2fr', alignItems: 'start', gap: '24px' }}>
-                <div>
-                  <label style={{ display: 'block', color: '#9ca3af', fontSize: '14px', marginBottom: '8px' }}>
-                    Monthly Income
-                  </label>
-                  <div style={{ display: 'flex', gap: '8px', alignItems: 'start' }}>
-                    <FormField
-                      control={budgetForm.control}
-                      name="monthly_income"
-                      render={({ field }) => (
-                        <FormItem className="flex-1">
-                          <FormControl>
-                            <Input type="number" placeholder="Enter monthly income" {...field} />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                    <Button type="submit" disabled={loadingStates.updateBudget}>
-                      {loadingStates.updateBudget ? (
-                        <>
-                          <LoadingSpinner size={16} />
-                          Updating...
-                        </>
-                      ) : (
-                        'Update'
-                      )}
-                    </Button>
-                  </div>
-                </div>
-                
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', paddingTop: '30px' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <span style={{ color: '#9ca3af', fontSize: '14px' }}>Needs (50%)</span>
-                    <span style={{ color: '#3b82f6', fontSize: '18px', fontWeight: '600' }}>
-                      ${budgetData.needs_budget?.toLocaleString() || 0}
-                    </span>
-                  </div>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <span style={{ color: '#9ca3af', fontSize: '14px' }}>Wants (30%)</span>
-                    <span style={{ color: '#10b981', fontSize: '18px', fontWeight: '600' }}>
-                      ${budgetData.wants_budget?.toLocaleString() || 0}
-                    </span>
-                  </div>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <span style={{ color: '#9ca3af', fontSize: '14px' }}>Savings (20%)</span>
-                    <span style={{ color: '#8b5cf6', fontSize: '18px', fontWeight: '600' }}>
-                      ${budgetData.savings_goal?.toLocaleString() || 0}
-                    </span>
-                  </div>
-                </div>
-              </div>
-            </form>
-          </Form>
-        </div>
-
-        {/* Budget vs Actual */}
-        {budgetAnalysis && (
-          <div style={{ backgroundColor: '#2a2a2a', borderRadius: '12px', padding: '24px', marginBottom: '24px', border: '1px solid #3a3a3a' }}>
-            <h3 style={{ color: '#e5e7eb', fontSize: '18px', fontWeight: '600', marginBottom: '16px' }}>
-              📊 Budget vs Actual Spending
-            </h3>
-            <ResponsiveContainer width="100%" height={300}>
-              <BarChart data={budgetComparison}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#3a3a3a" />
-                <XAxis dataKey="category" stroke="#6b7280" />
-                <YAxis tickFormatter={(value) => `${(value/1000).toFixed(0)}K`} stroke="#6b7280" />
-                <Tooltip 
-                  contentStyle={{ backgroundColor: '#2a2a2a', border: '1px solid #3a3a3a' }}
-                  labelStyle={{ color: '#e5e7eb' }}
-                />
-                <Bar dataKey="budgeted" fill="#3b82f6" name="Budgeted" />
-                <Bar dataKey="spent" fill="#10b981" name="Spent" />
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
-        )}
-
-        {/* Financial Principles */}
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '16px', marginBottom: '24px' }}>
-          <div style={{ backgroundColor: '#2a2a2a', padding: '20px', borderRadius: '12px', border: '1px solid #3a3a3a' }}>
-            <h4 style={{ color: '#e5e7eb', fontSize: '16px', fontWeight: '600', marginBottom: '12px' }}>
-              💰 50/30/20 Rule
-            </h4>
-            <p style={{ color: '#9ca3af', fontSize: '14px' }}>
-              50% for needs (rent, food, utilities), 30% for wants (entertainment, dining out), 
-              20% for savings and debt repayment.
-            </p>
+      {/* Budget Analysis */}
+      {budgetAnalysis && (
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          <div className="bg-gray-800/50 backdrop-blur-sm rounded-xl p-6 border border-gray-700/50">
+            <h4 className="text-sm font-medium text-gray-400 mb-2">Needs (50%)</h4>
+            <p className="text-2xl font-bold text-blue-400">${budgetAnalysis.needs_budget?.toLocaleString()}</p>
+            <p className="text-sm text-gray-500 mt-1">Essential expenses</p>
           </div>
           
-          <div style={{ backgroundColor: '#2a2a2a', padding: '20px', borderRadius: '12px', border: '1px solid #3a3a3a' }}>
-            <h4 style={{ color: '#e5e7eb', fontSize: '16px', fontWeight: '600', marginBottom: '12px' }}>
-              📈 The Boring Rule
-            </h4>
-            <p style={{ color: '#9ca3af', fontSize: '14px' }}>
-              Invest in low-cost index funds. Don't try to time the market. 
-              Boring investments often perform better over time.
-            </p>
+          <div className="bg-gray-800/50 backdrop-blur-sm rounded-xl p-6 border border-gray-700/50">
+            <h4 className="text-sm font-medium text-gray-400 mb-2">Wants (30%)</h4>
+            <p className="text-2xl font-bold text-purple-400">${budgetAnalysis.wants_budget?.toLocaleString()}</p>
+            <p className="text-sm text-gray-500 mt-1">Discretionary spending</p>
           </div>
           
-          <div style={{ backgroundColor: '#2a2a2a', padding: '20px', borderRadius: '12px', border: '1px solid #3a3a3a' }}>
-            <h4 style={{ color: '#e5e7eb', fontSize: '16px', fontWeight: '600', marginBottom: '12px' }}>
-              🧠 Conscious Spending
-            </h4>
-            <p style={{ color: '#9ca3af', fontSize: '14px' }}>
-              Spend extravagantly on things you love, cut costs mercilessly on things you don't. 
-              Make intentional choices.
-            </p>
+          <div className="bg-gray-800/50 backdrop-blur-sm rounded-xl p-6 border border-gray-700/50">
+            <h4 className="text-sm font-medium text-gray-400 mb-2">Savings (20%)</h4>
+            <p className="text-2xl font-bold text-green-400">${budgetAnalysis.savings_goal?.toLocaleString()}</p>
+            <p className="text-sm text-gray-500 mt-1">Emergency fund & investments</p>
           </div>
         </div>
+      )}
+    </div>
+  );
 
-        {/* Budget Health Check */}
-        {budgetAnalysis && (
-          <div style={{ backgroundColor: '#2a2a2a', borderRadius: '12px', padding: '24px', border: '1px solid #3a3a3a' }}>
-            <h3 style={{ color: '#e5e7eb', fontSize: '18px', fontWeight: '600', marginBottom: '16px' }}>
-              🏥 Budget Health Check
-            </h3>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-              {budgetComparison.map((item, index) => {
-                const isOnTrack = item.category === 'Savings (20%)' ? 
-                  item.actual >= item.budgeted : 
-                  item.spent <= item.budgeted;
-                
-                return (
-                  <div key={index} style={{ 
-                    display: 'flex', 
-                    justifyContent: 'space-between', 
-                    alignItems: 'center',
-                    padding: '16px',
-                    backgroundColor: '#1a1a1a',
-                    borderRadius: '8px',
-                    border: '1px solid #3a3a3a'
-                  }}>
-                    <span style={{ color: '#e5e7eb', fontSize: '14px', fontWeight: '500' }}>
-                      {item.category}
-                    </span>
-                    <div style={{ textAlign: 'right' }}>
-                      <div style={{ 
-                        fontSize: '16px', 
-                        fontWeight: '600',
-                        color: isOnTrack ? '#10b981' : '#ef4444'
-                      }}>
-                        {isOnTrack ? '✅ On Track' : '⚠️ Over Budget'}
-                      </div>
-                      <div style={{ fontSize: '12px', color: '#6b7280' }}>
-                        {item.category === 'Savings (20%)' ? 
-                          `Saving ${item.actual?.toLocaleString() || 0} / ${item.budgeted.toLocaleString()}` :
-                          `Spent ${item.spent.toLocaleString()} / ${item.budgeted.toLocaleString()}`
-                        }
-                      </div>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-        )}
-      </div>
-    );
-  };
-
+  // Main render
   return (
-    <div style={{ minHeight: '100vh', backgroundColor: '#0a0a0a' }}>
-      {/* Header */}
-      <div style={{ backgroundColor: '#1a1a1a', borderBottom: '1px solid #2a2a2a' }}>
-        <div style={{ maxWidth: '1400px', margin: '0 auto', padding: '0 24px' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '20px 0' }}>
-            <div style={{ display: 'flex', alignItems: 'center' }}>
-              <Calculator style={{ width: '28px', height: '28px', color: '#3b82f6', marginRight: '12px' }} />
-              <h1 style={{ fontSize: '24px', fontWeight: '600', color: '#e5e7eb' }}>
-                Personal Finance Tracker
-              </h1>
-            </div>
-            <div style={{ fontSize: '14px', color: '#6b7280' }}>
-              {loadingStates.initialLoad ? (
-                <span style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                  <LoadingSpinner size={16} />
-                  Connecting to Django API...
-                </span>
-              ) : (
-                `Connected to Django API • ${transactions.length} transactions`
-              )}
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Navigation */}
-      <div style={{ backgroundColor: '#1a1a1a', borderBottom: '1px solid #2a2a2a' }}>
-        <div style={{ maxWidth: '1400px', margin: '0 auto', padding: '0 24px' }}>
-          <nav style={{ display: 'flex', gap: '32px' }}>
-            {[
-              { id: 'dashboard', name: 'Dashboard', icon: Activity },
-              { id: 'transactions', name: 'Transactions', icon: DollarSign },
-              { id: 'analytics', name: 'Analytics', icon: BarChart3 },
-              { id: 'goals', name: 'Goals', icon: Target },
-              { id: 'budget', name: 'Smart Budget', icon: PiggyBank }
-            ].map((tab) => (
-              <Button
-                key={tab.id}
-                variant={activeTab === tab.id ? 'secondary' : 'ghost'}
-                onClick={() => setActiveTab(tab.id)}
-                className={`flex items-center gap-2 nav-button ${activeTab === tab.id ? 'active' : ''}`}
-                style={{
-                  padding: '12px 20px',
-                  borderRadius: '8px',
-                  fontWeight: activeTab === tab.id ? '600' : '500',
-                  color: activeTab === tab.id ? '#e5e7eb' : '#9ca3af',
-                  backgroundColor: activeTab === tab.id ? '#3b82f6' : 'transparent',
-                }}
-              >
-                <tab.icon className="h-4 w-4" />
-                {tab.name}
-              </Button>
-            ))}
-          </nav>
-        </div>
-      </div>
+    <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 text-white">
+      {/* Enhanced Navigation */}
+      <EnhancedNavigation 
+        activeTab={activeTab} 
+        setActiveTab={setActiveTab} 
+      />
 
       {/* Main Content */}
-      <div style={{ maxWidth: '1400px', margin: '0 auto' }}>
+      <div className="max-w-7xl mx-auto px-6 py-8">
         {loadingStates.initialLoad ? (
-          <div style={{ 
-            minHeight: '60vh', 
-            display: 'flex', 
-            justifyContent: 'center', 
-            alignItems: 'center',
-            flexDirection: 'column'
-          }}>
-            <LoadingSpinner size={50} />
-            <p style={{ marginTop: '20px', color: '#9ca3af', fontSize: '16px' }}>
+          <div className="min-h-[60vh] flex justify-center items-center flex-col">
+            <Loader2 className="h-12 w-12 animate-spin text-blue-400" />
+            <p className="mt-5 text-gray-400 text-lg">
               Loading your financial data...
             </p>
           </div>
@@ -2497,19 +1634,47 @@ const PersonalFinanceTracker = () => {
             {activeTab === 'analytics' && <Analytics />}
             {activeTab === 'goals' && <Goals />}
             {activeTab === 'budget' && <SmartBudgeting />}
+            {activeTab === 'categories' && (
+              <CategoryManager 
+                categories={categories}
+                setCategories={setCategories}
+                apiBase={API_BASE}
+                addToast={(message, type) => toast[type || 'info'](message)}
+              />
+            )}
+            {activeTab === 'budget-periods' && (
+              <BudgetPeriodManager 
+                budgetPeriods={budgetPeriods}
+                setBudgetPeriods={setBudgetPeriods}
+                apiBase={API_BASE}
+                addToast={(message, type) => toast[type || 'info'](message)}
+              />
+            )}
+            {activeTab === 'recurring' && (
+              <RecurringTransactionManager 
+                recurringTransactions={recurringTransactions}
+                setRecurringTransactions={setRecurringTransactions}
+                categories={categories}
+                apiBase={API_BASE}
+                addToast={(message, type) => toast[type || 'info'](message)}
+              />
+            )}
           </>
         )}
       </div>
 
       {/* Toast Notifications */}
-      {toasts.map(toast => (
-        <Toast
-          key={toast.id}
-          message={toast.message}
-          type={toast.type}
-          onClose={() => removeToast(toast.id)}
-        />
-      ))}
+      <Toaster 
+        position="bottom-right"
+        theme="dark"
+        toastOptions={{
+          style: {
+            background: '#1f2937',
+            border: '1px solid #374151',
+            color: '#e5e7eb',
+          },
+        }}
+      />
     </div>
   );
 };

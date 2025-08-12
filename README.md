@@ -139,6 +139,8 @@ FINANCE_TRACKER/
 - ✅ **Enhanced navigation** - Modern navigation with smooth transitions and active states
 - ✅ **Visual improvements** - Added hover effects, animations, and better styling
 - [ ] **Improve the navigation bar** - Use the Navigation menu components from shadcn
+- [ ] **Style refator** - Use a monochromatic color palette and rework the style to be more modern
+- [ ] **Components refactoring** - Implement standard components via schadcn ui library
 
 ### Features to Add
 - [ ] **Multiple budgets** - Support for different budget periods
