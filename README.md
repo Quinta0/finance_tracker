@@ -402,14 +402,10 @@ docker system prune -f
 - Docker deployment
 
 ### Upcoming Features
-- [ ] **Mobile App**: React Native mobile application
-- [ ] **Multi-user Support**: User accounts and authentication
-- [ ] **Bank Integration**: Connect to bank APIs for automatic imports
 - [ ] **Recurring Transactions**: Automatic monthly bills and income
 - [ ] **Advanced Reports**: PDF reports and detailed analytics
 - [ ] **Categories Management**: Custom expense/income categories
 - [ ] **Budget Templates**: Pre-defined budget templates
-- [ ] **Notifications**: Email/push notifications for goals and budgets
 
 ### Long-term Vision
 - Investment tracking
