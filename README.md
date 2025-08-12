@@ -402,7 +402,6 @@ docker system prune -f
 - Docker deployment
 
 ### Upcoming Features 🚧
-- [ ] **Multi-user Support**: User accounts and authentication
 - [ ] **Recurring Transactions**: Automatic monthly bills and income
 - [ ] **Advanced Reports**: PDF reports and detailed analytics
 - [ ] **Categories Management**: Custom expense/income categories
@@ -410,9 +409,6 @@ docker system prune -f
 
 ### Long-term Vision 🎯
 - Investment tracking
-- Tax preparation assistance
-- Financial advisor recommendations
-- Machine learning insights
 - Multi-currency support
 
 ## 📄 License
