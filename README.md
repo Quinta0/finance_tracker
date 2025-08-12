@@ -130,14 +130,14 @@ FINANCE_TRACKER/
 - ✅ **Loading states** - Add loading indicators for all API calls
 
 ### UI/UX Improvements
-- ✅ **Responsive design** - Better mobile/tablet layout
-- ✅ **Form validation** - Real-time validation with error messages
-- ✅ **Confirmation dialogs** - Better delete confirmations
-- ✅ **Toast notifications** - Replace alerts with modern notifications
-- ✅ **Empty states** - Better messaging when no data exists
-- ✅ **Date picker** - Improve date selection UX
-- ✅ **Enhanced navigation** - Modern navigation with smooth transitions and active states
-- ✅ **Visual improvements** - Added hover effects, animations, and better styling
+- [ ] **Responsive design** - Better mobile/tablet layout
+- [ ] **Form validation** - Real-time validation with error messages
+- [ ] **Confirmation dialogs** - Better delete confirmations
+- [ ] **Sonar notifications** - Replace alerts with modern notifications
+- [ ] **Empty states** - Better messaging when no data exists
+- [ ] **Date picker** - Improve date selection UX
+- [ ] **Enhanced navigation** - Modern navigation with smooth transitions and active states
+- [ ] **Visual improvements** - Added hover effects, animations, and better styling
 - [ ] **Improve the navigation bar** - Use the Navigation menu components from shadcn
 - [ ] **Style refator** - Use a monochromatic color palette and rework the style to be more modern
 - [ ] **Components refactoring** - Implement standard components via schadcn ui library
