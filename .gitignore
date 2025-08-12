@@ -243,6 +243,17 @@ tramp
 Dockerfile.prod
 docker-compose.override.yml
 
+# Docker volumes and data
+docker-volumes/
+data/
+backup_*.sqlite3
+
+# SSL certificates
+nginx/ssl/*.pem
+nginx/ssl/*.key
+nginx/ssl/*.crt
+nginx/ssl/*.cert
+
 # Deployment keys
 deploy_key*
 *.pem

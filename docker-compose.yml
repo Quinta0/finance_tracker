@@ -1,0 +1,56 @@
+services:
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: finance_tracker_backend
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./backend/db.sqlite3:/app/backend/db.sqlite3
+      - backend_static:/app/backend/static
+    environment:
+      - DEBUG=0
+      - ALLOWED_HOSTS=localhost,127.0.0.1,backend
+    networks:
+      - finance_tracker_network
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: finance_tracker_frontend
+    ports:
+      - "3000:3000"
+    environment:
+      - NEXT_PUBLIC_API_URL=http://localhost:8000/api
+    depends_on:
+      - backend
+    networks:
+      - finance_tracker_network
+    restart: unless-stopped
+
+  nginx:
+    image: nginx:alpine
+    container_name: finance_tracker_nginx
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf
+      - ./nginx/ssl:/etc/nginx/ssl
+      - backend_static:/var/www/static
+    depends_on:
+      - backend
+      - frontend
+    networks:
+      - finance_tracker_network
+    restart: unless-stopped
+
+volumes:
+  backend_static:
+
+networks:
+  finance_tracker_network:
+    driver: bridge

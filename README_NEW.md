@@ -2,19 +2,6 @@
 
 A comprehensive personal finance management application built with Django REST Framework (backend) and Next.js (frontend). Track your expenses, manage budgets with the 50/30/20 rule, set financial goals, and gain insights into your spending patterns.
 
-## 🌟 About This Project
-
-This Finance Tracker was created as my summer 2025 project to gain hands-on experience with full-stack web development while building something genuinely useful for personal finance management. It combines my passion for learning modern web technologies (Django REST Framework, Next.js, Docker) with the practical need for a comprehensive finance tracking solution.
-
-The project has been an exciting journey of exploring full-stack development, from designing RESTful APIs and database models to creating responsive React components and implementing containerized deployment. While built primarily as a learning experience, it's designed to be a fully functional application that anyone can use to take control of their finances.
-
-**Key Learning Goals Achieved:**
-- 🖥️ **Backend Development**: RESTful API design with Django REST Framework
-- 🎨 **Frontend Development**: Modern React with Next.js and component libraries
-- 🐳 **DevOps**: Docker containerization and deployment automation
-- 📊 **Data Visualization**: Interactive charts and financial analytics
-- 🎯 **Product Design**: User-centered design for financial management
-
 ## ✨ Features
 
 - **📊 Dashboard**: Real-time overview of your financial status with interactive charts
@@ -402,11 +389,14 @@ docker system prune -f
 - Docker deployment
 
 ### Upcoming Features 🚧
+- [ ] **Mobile App**: React Native mobile application
 - [ ] **Multi-user Support**: User accounts and authentication
+- [ ] **Bank Integration**: Connect to bank APIs for automatic imports
 - [ ] **Recurring Transactions**: Automatic monthly bills and income
 - [ ] **Advanced Reports**: PDF reports and detailed analytics
 - [ ] **Categories Management**: Custom expense/income categories
 - [ ] **Budget Templates**: Pre-defined budget templates
+- [ ] **Notifications**: Email/push notifications for goals and budgets
 
 ### Long-term Vision 🎯
 - Investment tracking

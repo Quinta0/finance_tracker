@@ -41,7 +41,7 @@ const Dashboard = ({ transactions = [] }) => {
     const expensesByCategory = transactions
       .filter(t => t.type === 'expense')
       .reduce((acc, t) => {
-        const categoryName = t.category?.name || t.category || 'Other';
+        const categoryName = t.category_name || t.category?.name || 'Other';
         acc[categoryName] = (acc[categoryName] || 0) + Math.abs(parseFloat(t.amount || 0));
         return acc;
       }, {});
@@ -55,7 +55,7 @@ const Dashboard = ({ transactions = [] }) => {
     const incomesByCategory = transactions
       .filter(t => t.type === 'income')
       .reduce((acc, t) => {
-        const categoryName = t.category?.name || t.category || 'Other';
+        const categoryName = t.category_name || t.category?.name || 'Other';
         acc[categoryName] = (acc[categoryName] || 0) + parseFloat(t.amount || 0);
         return acc;
       }, {});
@@ -264,8 +264,13 @@ const Dashboard = ({ transactions = [] }) => {
                   backgroundColor: '#171717', 
                   border: '1px solid #262626',
                   borderRadius: '8px',
-                  color: '#e5e5e5'
+                  color: '#e5e5e5',
+                  fontSize: '12px',
+                  fontWeight: '500',
+                  boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05)'
                 }}
+                labelStyle={{ color: '#f5f5f5' }}
+                formatter={(value) => [`$${value.toLocaleString()}`, 'Savings']}
               />
               <Line 
                 type="monotone" 
@@ -306,8 +311,13 @@ const Dashboard = ({ transactions = [] }) => {
                     backgroundColor: '#171717', 
                     border: '1px solid #262626',
                     borderRadius: '8px',
-                    color: '#e5e5e5'
+                    color: '#e5e5e5',
+                    fontSize: '12px',
+                    fontWeight: '500',
+                    boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05)'
                   }}
+                  labelStyle={{ color: '#f5f5f5' }}
+                  formatter={(value, name) => [`$${value.toLocaleString()}`, name]}
                 />
               </PieChart>
             </ResponsiveContainer>
@@ -360,8 +370,13 @@ const Dashboard = ({ transactions = [] }) => {
                     backgroundColor: '#171717', 
                     border: '1px solid #262626',
                     borderRadius: '8px',
-                    color: '#e5e5e5'
+                    color: '#e5e5e5',
+                    fontSize: '12px',
+                    fontWeight: '500',
+                    boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05)'
                   }}
+                  labelStyle={{ color: '#f5f5f5' }}
+                  formatter={(value, name) => [`$${value.toLocaleString()}`, name]}
                 />
               </PieChart>
             </ResponsiveContainer>

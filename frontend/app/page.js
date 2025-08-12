@@ -4,7 +4,10 @@ import React, { useState, useEffect } from 'react';
 import SimpleAddTransactionForm from '../components/SimpleAddTransactionForm';
 import Dashboard from '../components/Dashboard';
 import TransactionList from '../components/TransactionList';
-import { Home, CreditCard, Settings, BarChart3, Target, Zap, Wallet } from 'lucide-react';
+import Analytics from '../components/Analytics';
+import FinancialGoals from '../components/FinancialGoals';
+import BudgetManagement from '../components/BudgetManagement';
+import { Home, CreditCard, Settings, BarChart3, Target, Zap, Wallet, Calculator } from 'lucide-react';
 import { Toaster, toast } from 'sonner';
 import apiService from '../lib/api';
 
@@ -222,6 +225,7 @@ const ModernFinanceTracker = () => {
           { id: 'dashboard', icon: Home, label: 'Dashboard' },
           { id: 'transactions', icon: CreditCard, label: 'Transactions' },
           { id: 'analytics', icon: BarChart3, label: 'Analytics' },
+          { id: 'budget', icon: Calculator, label: 'Budget' },
           { id: 'goals', icon: Target, label: 'Goals' },
           { id: 'features', icon: Zap, label: 'Features' },
         ].map((item) => (
@@ -257,6 +261,18 @@ const ModernFinanceTracker = () => {
 
   const DashboardSection = () => (
     <Dashboard transactions={transactions} />
+  );
+
+  const AnalyticsSection = () => (
+    <Analytics transactions={transactions} />
+  );
+
+  const GoalsSection = () => (
+    <FinancialGoals />
+  );
+
+  const BudgetSection = () => (
+    <BudgetManagement transactions={transactions} />
   );
 
   const TransactionsSection = () => (
@@ -303,18 +319,9 @@ const ModernFinanceTracker = () => {
         <div style={styles.contentWrapper}>
           {activeTab === 'dashboard' && <DashboardSection />}
           {activeTab === 'transactions' && <TransactionsSection />}
-          {activeTab === 'analytics' && (
-            <div>
-              <h1 style={styles.title}>Analytics</h1>
-              <p style={styles.subtitle}>Deep insights into your financial patterns</p>
-            </div>
-          )}
-          {activeTab === 'goals' && (
-            <div>
-              <h1 style={styles.title}>Financial Goals</h1>
-              <p style={styles.subtitle}>Track your progress towards financial freedom</p>
-            </div>
-          )}
+          {activeTab === 'analytics' && <AnalyticsSection />}
+          {activeTab === 'budget' && <BudgetSection />}
+          {activeTab === 'goals' && <GoalsSection />}
           {activeTab === 'features' && (
             <div>
               <div style={styles.header}>

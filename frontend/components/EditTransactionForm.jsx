@@ -151,6 +151,7 @@ const EditTransactionForm = ({ transaction, open, onClose, onTransactionUpdated,
     <Dialog open={open} onOpenChange={handleClose}>
       <DialogContent 
         showCloseButton={false}
+        className="bg-gray-900 border-gray-700 text-gray-100 max-w-md w-full max-h-[90vh] overflow-y-auto p-0"
         style={{
           backgroundColor: '#171717',
           border: '1px solid #262626',
@@ -161,7 +162,7 @@ const EditTransactionForm = ({ transaction, open, onClose, onTransactionUpdated,
           maxHeight: '90vh',
           overflowY: 'auto',
           padding: '0',
-          position: 'relative'
+          zIndex: 9999
         }}
       >
         {/* Custom close button */}

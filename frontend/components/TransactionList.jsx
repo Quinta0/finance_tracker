@@ -200,7 +200,7 @@ const TransactionList = ({
                     {transaction.description}
                   </p>
                   <p style={{ fontSize: '12px', color: '#737373' }}>
-                    {transaction.category} • {transaction.date}
+                    {transaction.category_name || transaction.category} • {transaction.date}
                   </p>
                 </div>
               </div>

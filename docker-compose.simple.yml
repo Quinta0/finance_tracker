@@ -1,0 +1,27 @@
+services:
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: finance_tracker_backend
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./backend/db.sqlite3:/app/backend/db.sqlite3
+    environment:
+      - DEBUG=1
+      - ALLOWED_HOSTS=localhost,127.0.0.1,backend
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: finance_tracker_frontend
+    ports:
+      - "3000:3000"
+    environment:
+      - NEXT_PUBLIC_API_URL=http://localhost:8000/api
+    depends_on:
+      - backend
+    restart: unless-stopped

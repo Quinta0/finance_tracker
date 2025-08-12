@@ -176,7 +176,7 @@ class Goal(models.Model):
     @property
     def progress_percentage(self):
         if self.target_amount > 0:
-            return min((self.current_amount / self.target_amount) * 100, 100)
+            return min((float(self.current_amount) / float(self.target_amount)) * 100, 100)
         return 0
     
     def __str__(self):
