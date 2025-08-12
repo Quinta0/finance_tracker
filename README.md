@@ -1,32 +1,32 @@
-# 💰 Personal Finance Tracker
+# Personal Finance Tracker
 
 A comprehensive personal finance management application built with Django REST Framework (backend) and Next.js (frontend). Track your expenses, manage budgets with the 50/30/20 rule, set financial goals, and gain insights into your spending patterns.
 
-## 🌟 About This Project
+## About This Project
 
 This Finance Tracker was created as my summer 2025 project to gain hands-on experience with full-stack web development while building something genuinely useful for personal finance management. It combines my passion for learning modern web technologies (Django REST Framework, Next.js, Docker) with the practical need for a comprehensive finance tracking solution.
 
 The project has been an exciting journey of exploring full-stack development, from designing RESTful APIs and database models to creating responsive React components and implementing containerized deployment. While built primarily as a learning experience, it's designed to be a fully functional application that anyone can use to take control of their finances.
 
 **Key Learning Goals Achieved:**
-- 🖥️ **Backend Development**: RESTful API design with Django REST Framework
-- 🎨 **Frontend Development**: Modern React with Next.js and component libraries
-- 🐳 **DevOps**: Docker containerization and deployment automation
-- 📊 **Data Visualization**: Interactive charts and financial analytics
-- 🎯 **Product Design**: User-centered design for financial management
+- **Backend Development**: RESTful API design with Django REST Framework
+- **Frontend Development**: Modern React with Next.js and component libraries
+- **DevOps**: Docker containerization and deployment automation
+- **Data Visualization**: Interactive charts and financial analytics
+- **Product Design**: User-centered design for financial management
 
-## ✨ Features
+## Features
 
-- **📊 Dashboard**: Real-time overview of your financial status with interactive charts
-- **💳 Transaction Management**: Track income and expenses with smart categorization  
-- **🎯 Smart Budgeting**: 50/30/20 rule implementation with custom allocation
-- **📈 Analytics & Insights**: Comprehensive spending analysis with personalized recommendations
-- **🏆 Financial Goals**: Set, track, and achieve your savings objectives
-- **📁 Data Management**: CSV export/import functionality for easy data migration
-- **🌙 Modern UI**: Responsive design with dark theme support
-- **🐳 Docker Ready**: Easy deployment with Docker and Docker Compose
+- **Dashboard**: Real-time overview of your financial status with interactive charts
+- **Transaction Management**: Track income and expenses with smart categorization  
+- **Smart Budgeting**: 50/30/20 rule implementation with custom allocation
+- **Analytics & Insights**: Comprehensive spending analysis with personalized recommendations
+- **Financial Goals**: Set, track, and achieve your savings objectives
+- **Data Management**: CSV export/import functionality for easy data migration
+- **Modern UI**: Responsive design with dark theme support
+- **Docker Ready**: Easy deployment with Docker and Docker Compose
 
-## 🚀 Quick Start (Recommended)
+## Quick Start (Recommended)
 
 ### Using Docker (Self-Hosting)
 
@@ -84,7 +84,7 @@ The `manage.sh` script provides convenient commands for managing your Finance Tr
 ./manage.sh reset       # Reset everything (destructive)
 ```
 
-## 🛠️ Manual Installation (Development)
+## Manual Installation (Development)
 
 For developers who want to run the application manually or contribute to the project.
 
@@ -158,18 +158,18 @@ For developers who want to run the application manually or contribute to the pro
 
 You can run both services simultaneously using two terminal windows, or use the provided development scripts.
 
-## 🏗️ Project Structure
+## Project Structure
 
 ```
 finance_tracker/
-├── 🐳 Docker & Deployment
+├── Docker & Deployment
 │   ├── docker-compose.yml          # Development environment
 │   ├── docker-compose.prod.yml     # Production environment
 │   ├── manage.sh                   # Management script
 │   ├── .env.example               # Environment template
 │   └── nginx/                     # Nginx configuration
 │
-├── 🖥️ Backend (Django REST API)
+├── Backend (Django REST API)
 │   ├── finance_tracker/           # Django project settings
 │   ├── finance/                   # Main app
 │   │   ├── models.py              # Database models
@@ -180,7 +180,7 @@ finance_tracker/
 │   ├── Dockerfile                 # Backend container
 │   └── manage.py                  # Django management
 │
-├── 🎨 Frontend (Next.js React)
+├── Frontend (Next.js React)
 │   ├── app/                       # Next.js app directory
 │   │   ├── page.js                # Main page component
 │   │   ├── layout.js              # App layout
@@ -198,13 +198,13 @@ finance_tracker/
 │   ├── package.json               # Node.js dependencies
 │   └── Dockerfile                 # Frontend container
 │
-└── 📚 Documentation
+└── Documentation
     ├── README.md                  # This file
     ├── DOCKER.md                  # Docker guide
     └── TESTING.md                 # Testing guide
 ```
 
-## 📊 API Reference
+## API Reference
 
 ### Authentication
 Currently using session-based authentication. Token-based auth coming soon.
@@ -236,7 +236,7 @@ Currently using session-based authentication. Token-based auth coming soon.
 | `GET` | `/api/goals/active_goals/` | Get active goals |
 | `POST` | `/api/goals/{id}/update_progress/` | Update progress |
 
-## 🔧 Configuration
+## Configuration
 
 ### Environment Variables
 
@@ -267,7 +267,7 @@ DB_HOST=db
 DB_PORT=5432
 ```
 
-## 📱 Usage Guide
+## Usage Guide
 
 ### Getting Started
 1. **Set Monthly Income**: Go to Budget Management and set your monthly income
@@ -282,7 +282,7 @@ DB_PORT=5432
 - **Review Goals**: Check and update your financial goals monthly
 - **Export Data**: Regularly backup your data using CSV export
 
-## 🚀 Deployment
+## Deployment
 
 ### Docker Production Setup
 
@@ -312,7 +312,7 @@ The application can be deployed on:
 - **Heroku**: Using container registry
 - **VPS**: Any provider supporting Docker
 
-## 🛠️ Development
+## Development
 
 ### Contributing
 
@@ -350,7 +350,7 @@ npm test              # Frontend tests (if available)
 3. **API**: Update `serializers.py` and `urls.py`
 4. **Testing**: Add tests for new functionality
 
-## 🐛 Troubleshooting
+## Troubleshooting
 
 ### Common Issues
 
@@ -386,13 +386,13 @@ docker system prune -f
 
 ### Getting Help
 
-- 📋 **Issues**: [GitHub Issues](https://github.com/Quinta0/finance_tracker/issues)
-- 💬 **Discussions**: [GitHub Discussions](https://github.com/Quinta0/finance_tracker/discussions)
-- 📖 **Documentation**: Check `DOCKER.md` and `TESTING.md`
+- **Issues**: [GitHub Issues](https://github.com/Quinta0/finance_tracker/issues)
+- **Discussions**: [GitHub Discussions](https://github.com/Quinta0/finance_tracker/discussions)
+- **Documentation**: Check `DOCKER.md` and `TESTING.md`
 
-## 📋 Roadmap
+## Roadmap
 
-### Current Features ✅
+### Current Features
 - Transaction management with categories
 - 50/30/20 budget rule implementation
 - Financial goals tracking
@@ -401,21 +401,25 @@ docker system prune -f
 - Modern responsive UI
 - Docker deployment
 
-### Upcoming Features 🚧
+### Upcoming Features
+- [ ] **Mobile App**: React Native mobile application
+- [ ] **Multi-user Support**: User accounts and authentication
+- [ ] **Bank Integration**: Connect to bank APIs for automatic imports
 - [ ] **Recurring Transactions**: Automatic monthly bills and income
 - [ ] **Advanced Reports**: PDF reports and detailed analytics
 - [ ] **Categories Management**: Custom expense/income categories
 - [ ] **Budget Templates**: Pre-defined budget templates
+- [ ] **Notifications**: Email/push notifications for goals and budgets
 
-### Long-term Vision 🎯
+### Long-term Vision
 - Investment tracking
 - Multi-currency support
 
-## 📄 License
+## License
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
-## 🙏 Acknowledgments
+## Acknowledgments
 
 - **Django REST Framework**: Powerful API development
 - **Next.js**: Modern React framework
@@ -427,7 +431,7 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 <div align="center">
 
-**⭐ If you find this project helpful, please consider giving it a star!**
+**If you find this project helpful, please consider giving it a star!**
 
 [Report Bug](https://github.com/Quinta0/finance_tracker/issues) · [Request Feature](https://github.com/Quinta0/finance_tracker/issues) · [Contribute](https://github.com/Quinta0/finance_tracker/pulls)
 
