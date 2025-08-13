@@ -10,8 +10,9 @@ services:
       - backend_db:/app/backend/db
       - backend_static:/app/backend/static
     environment:
-      - DEBUG=0
-      - ALLOWED_HOSTS=localhost,127.0.0.1,backend
+      - DEBUG=${DEBUG:-0}
+      - ALLOWED_HOSTS=${ALLOWED_HOSTS:-localhost,127.0.0.1,backend}
+      - CORS_ALLOWED_ORIGINS=${CORS_ALLOWED_ORIGINS:-http://localhost:3000,http://127.0.0.1:3000}
     networks:
       - finance_tracker_network
     restart: unless-stopped
