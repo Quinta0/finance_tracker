@@ -422,7 +422,8 @@ const SimpleAddTransactionForm = ({ onTransactionAdded, trigger, categories = []
               <SelectContent style={{
                 backgroundColor: '#262626',
                 border: '1px solid #404040',
-                borderRadius: '8px'
+                borderRadius: '8px',
+                zIndex: 10000  // Higher than dialog z-index
               }}>
                 {getFilteredCategories(formData.type).length > 0 ? (
                   getFilteredCategories(formData.type).map((category) => (
