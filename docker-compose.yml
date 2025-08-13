@@ -7,7 +7,7 @@ services:
     ports:
       - "8810:8000"
     volumes:
-      - ./backend/db.sqlite3:/app/backend/db.sqlite3
+      - backend_db:/app/backend/db
       - backend_static:/app/backend/static
     environment:
       - DEBUG=0
@@ -32,6 +32,7 @@ services:
     restart: unless-stopped
 
 volumes:
+  backend_db:
   backend_static:
 
 networks:

@@ -21,7 +21,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY . .
 
 # Create directory for SQLite database
-RUN mkdir -p /app/backend/data
+RUN mkdir -p /app/backend/db
 
 # Run migrations and create superuser script
 COPY docker-entrypoint.sh .
