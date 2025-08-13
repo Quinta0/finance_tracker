@@ -3,6 +3,9 @@
 # Wait for database to be ready (not needed for SQLite but good practice)
 echo "Starting Django backend..."
 
+# Create migrations if they don't exist
+python manage.py makemigrations
+
 # Run migrations
 python manage.py migrate
 
