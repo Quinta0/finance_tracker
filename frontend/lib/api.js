@@ -1,5 +1,24 @@
 // API Configuration
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api';
+// Try to detect the correct API URL at runtime
+const getApiBaseUrl = () => {
+  // If we have a build-time environment variable, use it
+  if (process.env.NEXT_PUBLIC_API_URL) {
+    return process.env.NEXT_PUBLIC_API_URL;
+  }
+  
+  // For client-side, detect from current location
+  if (typeof window !== 'undefined') {
+    const protocol = window.location.protocol;
+    const hostname = window.location.hostname;
+    // Use the same host but port 8810 for API
+    return `${protocol}//${hostname}:8810/api`;
+  }
+  
+  // Fallback for server-side
+  return 'http://localhost:8810/api';
+};
+
+const API_BASE_URL = getApiBaseUrl();
 
 // API Service Class
 class ApiService {

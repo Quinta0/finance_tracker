@@ -20,6 +20,8 @@ services:
     build:
       context: ./frontend
       dockerfile: Dockerfile
+      args:
+        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:8810/api}
     container_name: finance_tracker_frontend
     ports:
       - "${FRONTEND_PORT:-3310}:3000"
