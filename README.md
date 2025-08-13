@@ -48,9 +48,46 @@ cd finance_tracker
 ./manage.sh dev
 
 # The application will be available at:
-# - Frontend: http://localhost:3000
-# - Backend API: http://localhost:8000/api
-# - Admin Panel: http://localhost:8000/admin
+# - Frontend: http://localhost:3310
+# - Backend API: http://localhost:8810/api
+# - Admin Panel: http://localhost:8810/admin
+```
+
+## Port Configuration
+
+**Default Docker Ports:**
+- Frontend: `3310`
+- Backend API: `8810` 
+- Nginx: `8180` (HTTP), `8543` (HTTPS)
+
+**⚠️ Port Conflicts:** If you're running other Docker services (like media servers, development environments, etc.), you may encounter port conflicts. The default ports 3000, 8000, 80, and 443 are commonly used by other applications.
+
+**Common Conflicting Services:**
+- Port 3000: Homepage, React dev servers, various dashboards
+- Port 8000: Django dev servers, other Python applications  
+- Port 80/443: Traefik, Nginx, Apache web servers
+- Port 8080: qBittorrent, Jenkins, various web UIs
+
+**To Change Ports:**
+1. Edit `docker-compose.yml` and modify the port mappings:
+   ```yaml
+   services:
+     frontend:
+       ports:
+         - "YOUR_PORT:3000"  # Change YOUR_PORT to your preferred port
+     backend:
+       ports:
+         - "YOUR_PORT:8000"  # Change YOUR_PORT to your preferred port
+   ```
+2. Update the `NEXT_PUBLIC_API_URL` environment variable in the frontend service to match your backend port.
+
+**Alternative: Use Environment Variables**
+Create a `.env` file to customize ports:
+```env
+FRONTEND_PORT=3310
+BACKEND_PORT=8810
+NGINX_HTTP_PORT=8180
+NGINX_HTTPS_PORT=8543
 ```
 
 #### 3. Production Deployment
@@ -63,8 +100,8 @@ nano .env  # Edit with your production values
 ./manage.sh prod
 
 # Application will be available at:
-# - Frontend: http://localhost
-# - API: http://localhost/api
+# - Frontend: http://localhost:8180 (via Nginx)
+# - API: http://localhost:8180/api (via Nginx)
 ```
 
 ### Management Script Commands
@@ -133,7 +170,7 @@ For developers who want to run the application manually or contribute to the pro
    python manage.py runserver
    ```
    
-   Backend API will be available at: `http://localhost:8000/api`
+   Backend API will be available at: `http://localhost:8810/api`
 
 ### Frontend Setup (Next.js)
 
@@ -152,7 +189,7 @@ For developers who want to run the application manually or contribute to the pro
    npm run dev
    ```
    
-   Frontend will be available at: `http://localhost:3000`
+   Frontend will be available at: `http://localhost:3310`
 
 ### Running Both Services
 
