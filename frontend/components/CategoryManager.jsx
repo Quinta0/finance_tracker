@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
+import { getApiUrl } from '../lib/apiConfig';
 
 const CategoryManager = ({ onCategoryChange }) => {
   const [categories, setCategories] = useState({ income: [], expense: [] });
@@ -19,7 +20,7 @@ const CategoryManager = ({ onCategoryChange }) => {
     icon: 'tag'
   });
 
-  const API_BASE = 'http://localhost:8000/api';
+  const API_BASE = getApiUrl();
 
   const iconOptions = [
     { value: 'tag', label: '🏷️ Tag' },

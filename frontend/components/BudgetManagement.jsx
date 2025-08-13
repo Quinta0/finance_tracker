@@ -18,6 +18,7 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 import apiService from '../lib/api';
+import BudgetTemplateSelectorFixed from './BudgetTemplateSelectorFixed';
 
 const BudgetManagement = ({ transactions = [] }) => {
   const [budget, setBudget] = useState(null);
@@ -161,6 +162,13 @@ const BudgetManagement = ({ transactions = [] }) => {
     setCustomPercentages(false);
   };
 
+  // Handle template selection
+  const handleTemplateSelect = (template) => {
+    setAllocations(template.allocations);
+    setCustomPercentages(true);
+    toast.success(`Applied ${template.name} template!`);
+  };
+
   // Calculate budget amounts
   const income = parseFloat(monthlyIncome) || 0;
   const calculatedBudget = {
@@ -289,6 +297,13 @@ const BudgetManagement = ({ transactions = [] }) => {
               <RefreshCw style={{ width: 16, height: 16 }} />
               50/30/20 Rule
             </button>
+            
+            <BudgetTemplateSelectorFixed 
+              onTemplateSelect={handleTemplateSelect}
+              currentAllocations={allocations}
+              monthlyIncome={income}
+            />
+            
             <button 
               onClick={() => setEditingBudget(!editingBudget)}
               style={styles.button}

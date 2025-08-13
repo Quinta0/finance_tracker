@@ -31,14 +31,18 @@ import {
 } from 'recharts';
 import { apiService } from '../lib/api';
 import { toast } from 'sonner';
+import pdfReportService from '../lib/pdfReports';
 
 export default function Analytics() {
   const [transactions, setTransactions] = useState([]);
   const [timeRange, setTimeRange] = useState('3months');
   const [loading, setLoading] = useState(true);
+  const [budget, setBudget] = useState(null);
+  const [generatingPDF, setGeneratingPDF] = useState(false);
 
   useEffect(() => {
     loadTransactions();
+    loadBudgetData();
   }, []);
 
   const loadTransactions = async () => {
@@ -154,6 +158,32 @@ export default function Analytics() {
     console.log('Analytics data computed:', result);
     return result;
   }, [transactions, timeRange]);
+
+  const loadBudgetData = async () => {
+    try {
+      const budgetData = await apiService.getCurrentBudget();
+      setBudget(budgetData);
+    } catch (error) {
+      console.error('Error loading budget data:', error);
+    }
+  };
+
+  const handlePDFExport = async () => {
+    setGeneratingPDF(true);
+    try {
+      const monthsBack = timeRange === '3months' ? 3 : timeRange === '6months' ? 6 : 12;
+      const reportData = await apiService.getReportData(monthsBack);
+      
+      const filename = `financial-report-${timeRange}-${new Date().toISOString().split('T')[0]}.pdf`;
+      pdfReportService.downloadReport(reportData, filename, timeRange);
+      toast.success('PDF report generated successfully!');
+    } catch (error) {
+      console.error('Error generating PDF:', error);
+      toast.error('Failed to generate PDF report');
+    } finally {
+      setGeneratingPDF(false);
+    }
+  };
 
   const handleExport = () => {
     const csvContent = "data:text/csv;charset=utf-8," + 
@@ -284,7 +314,27 @@ export default function Analytics() {
               }}
             >
               <Download style={{ width: 14, height: 14 }} />
-              Export
+              CSV
+            </button>
+            
+            <button 
+              onClick={handlePDFExport}
+              disabled={generatingPDF}
+              style={{
+                padding: '8px 16px',
+                backgroundColor: generatingPDF ? '#404040' : '#dc2626',
+                color: '#ffffff',
+                border: 'none',
+                borderRadius: '8px',
+                cursor: generatingPDF ? 'not-allowed' : 'pointer',
+                fontSize: '12px',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px'
+              }}
+            >
+              <Download style={{ width: 14, height: 14 }} />
+              {generatingPDF ? 'Generating...' : 'PDF Report'}
             </button>
           </div>
         </div>

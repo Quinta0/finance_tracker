@@ -7,9 +7,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog";
 import { Calendar as CalendarComponent } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { Switch } from "@/components/ui/switch";
 import { format } from "date-fns";
 import { Badge } from "@/components/ui/badge";
+import { getApiUrl } from '../lib/apiConfig';
 
 const RecurringTransactionManager = ({ categories, onRecurringTransactionChange }) => {
   const [recurringTransactions, setRecurringTransactions] = useState([]);
@@ -28,7 +28,7 @@ const RecurringTransactionManager = ({ categories, onRecurringTransactionChange 
     is_active: true
   });
 
-  const API_BASE = 'http://localhost:8000/api';
+  const API_BASE = getApiUrl();
 
   const frequencyOptions = [
     { value: 'daily', label: 'Daily' },

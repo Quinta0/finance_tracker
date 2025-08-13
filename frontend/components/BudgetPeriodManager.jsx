@@ -9,6 +9,7 @@ import { Calendar as CalendarComponent } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { format } from "date-fns";
 import { Badge } from "@/components/ui/badge";
+import { getApiUrl } from '../lib/apiConfig';
 
 const BudgetPeriodManager = ({ onPeriodChange }) => {
   const [periods, setPeriods] = useState([]);
@@ -18,11 +19,10 @@ const BudgetPeriodManager = ({ onPeriodChange }) => {
     name: '',
     period_type: 'monthly',
     start_date: new Date(),
-    end_date: new Date(),
-    is_active: true
+    end_date: new Date(new Date().setMonth(new Date().getMonth() + 1))
   });
 
-  const API_BASE = 'http://localhost:8000/api';
+  const API_BASE = getApiUrl();
 
   useEffect(() => {
     fetchPeriods();

@@ -476,6 +476,111 @@ class BudgetViewSet(viewsets.ModelViewSet):
             }
         })
 
+    @action(detail=False, methods=['get'])
+    def report_data(self, request):
+        """Get comprehensive data for PDF reports"""
+        # Get period parameter
+        period_id = request.query_params.get('period_id')
+        months_back = int(request.query_params.get('months_back', 3))
+        
+        # Calculate date range
+        end_date = timezone.now().date()
+        start_date = end_date - timedelta(days=months_back * 30)
+        
+        if period_id:
+            try:
+                budget_period = BudgetPeriod.objects.get(id=period_id)
+                start_date = budget_period.start_date
+                end_date = budget_period.end_date
+            except BudgetPeriod.DoesNotExist:
+                pass
+        
+        # Get transactions
+        transactions = Transaction.objects.filter(
+            date__gte=start_date,
+            date__lte=end_date
+        ).order_by('-date')
+        
+        # Get budget data
+        current_budget = None
+        if period_id:
+            current_budget = Budget.objects.filter(budget_period_id=period_id).first()
+        else:
+            current_period = BudgetPeriod.objects.filter(
+                start_date__lte=end_date,
+                end_date__gte=end_date,
+                is_active=True
+            ).first()
+            if current_period:
+                current_budget = Budget.objects.filter(budget_period=current_period).first()
+        
+        # Calculate analytics
+        total_income = transactions.filter(type='income').aggregate(
+            total=Sum('amount'))['total'] or 0
+        total_expenses = transactions.filter(type='expense').aggregate(
+            total=Sum('amount'))['total'] or 0
+        
+        # Category breakdown
+        category_breakdown = transactions.filter(type='expense').values(
+            'category__name', 'category__color'
+        ).annotate(
+            total=Sum('amount')
+        ).order_by('-total')
+        
+        # Monthly trend
+        monthly_data = {}
+        for transaction in transactions:
+            month_key = transaction.date.strftime('%Y-%m')
+            month_name = transaction.date.strftime('%b %Y')
+            
+            if month_key not in monthly_data:
+                monthly_data[month_key] = {
+                    'month': month_name,
+                    'income': 0,
+                    'expenses': 0
+                }
+            
+            if transaction.type == 'income':
+                monthly_data[month_key]['income'] += float(transaction.amount)
+            else:
+                monthly_data[month_key]['expenses'] += float(transaction.amount)
+        
+        monthly_trend = list(monthly_data.values())
+        
+        # Compile response
+        return Response({
+            'period': {
+                'start_date': start_date.isoformat(),
+                'end_date': end_date.isoformat(),
+                'months_back': months_back
+            },
+            'transactions': TransactionSerializer(transactions[:50], many=True).data,  # Limit for performance
+            'budget': BudgetSerializer(current_budget).data if current_budget else None,
+            'analytics': {
+                'insights': {
+                    'totalIncome': float(total_income),
+                    'totalExpenses': float(total_expenses),
+                    'netWorthChange': float(total_income - total_expenses),
+                    'savingsRate': ((total_income - total_expenses) / total_income * 100) if total_income > 0 else 0,
+                    'avgMonthlySpending': float(total_expenses) / max(months_back, 1),
+                    'avgDailySpending': float(total_expenses) / max(months_back * 30, 1),
+                    'largestCategory': {
+                        'category': category_breakdown[0]['category__name'],
+                        'amount': float(category_breakdown[0]['total'])
+                    } if category_breakdown else None
+                },
+                'categoryBreakdown': [
+                    {
+                        'name': item['category__name'] or 'Uncategorized',
+                        'amount': float(item['total']),
+                        'color': item['category__color']
+                    }
+                    for item in category_breakdown
+                ],
+                'monthlyTrend': monthly_trend
+            }
+        })
+
 
 class GoalViewSet(viewsets.ModelViewSet):
     queryset = Goal.objects.all()
