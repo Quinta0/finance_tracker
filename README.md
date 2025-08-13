@@ -91,6 +91,20 @@ BACKEND_PORT=8810
 
 This application works great with existing reverse proxy setups like **Traefik**, **Nginx Proxy Manager**, or **Caddy**. Since many homelab users already have these running, we've removed the built-in Nginx service to avoid conflicts.
 
+### Portainer Deployment
+
+When deploying via **Portainer** (especially on Proxmox or remote hosts), you need to configure the API URL properly:
+
+1. **In Portainer Stack Environment Variables**, add:
+   ```env
+   NEXT_PUBLIC_API_URL=http://YOUR_PROXMOX_IP:8810/api
+   FRONTEND_PORT=3310
+   BACKEND_PORT=8810
+   ```
+   Replace `YOUR_PROXMOX_IP` with your actual Proxmox/host IP address.
+
+2. **Why this is needed**: The frontend runs in the browser and needs to connect to the backend API. When using `localhost`, it tries to connect to the user's local machine, not the Portainer host.
+
 ### Using with Traefik
 
 If you're already running Traefik (like in the example homelab stack), add these labels to your services:

@@ -5,7 +5,7 @@ services:
       dockerfile: Dockerfile
     container_name: finance_tracker_backend
     ports:
-      - "8810:8000"
+      - "${BACKEND_PORT:-8810}:8000"
     volumes:
       - backend_db:/app/backend/db
       - backend_static:/app/backend/static
@@ -22,9 +22,9 @@ services:
       dockerfile: Dockerfile
     container_name: finance_tracker_frontend
     ports:
-      - "3310:3000"
+      - "${FRONTEND_PORT:-3310}:3000"
     environment:
-      - NEXT_PUBLIC_API_URL=http://localhost:8810/api
+      - NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL:-http://localhost:8810/api}
     depends_on:
       - backend
     networks:
