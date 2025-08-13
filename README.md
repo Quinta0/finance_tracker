@@ -58,7 +58,6 @@ cd finance_tracker
 **Default Docker Ports:**
 - Frontend: `3310`
 - Backend API: `8810` 
-- Nginx: `8180` (HTTP), `8543` (HTTPS)
 
 **⚠️ Port Conflicts:** If you're running other Docker services (like media servers, development environments, etc.), you may encounter port conflicts. The default ports 3000, 8000, 80, and 443 are commonly used by other applications.
 
@@ -86,9 +85,62 @@ Create a `.env` file to customize ports:
 ```env
 FRONTEND_PORT=3310
 BACKEND_PORT=8810
-NGINX_HTTP_PORT=8180
-NGINX_HTTPS_PORT=8543
 ```
+
+## Reverse Proxy Integration
+
+This application works great with existing reverse proxy setups like **Traefik**, **Nginx Proxy Manager**, or **Caddy**. Since many homelab users already have these running, we've removed the built-in Nginx service to avoid conflicts.
+
+### Using with Traefik
+
+If you're already running Traefik (like in the example homelab stack), add these labels to your services:
+
+```yaml
+services:
+  frontend:
+    # ... existing configuration
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.finance-frontend.rule=Host(`finance.yourdomain.com`)"
+      - "traefik.http.routers.finance-frontend.tls=true"
+      - "traefik.http.routers.finance-frontend.tls.certresolver=letsencrypt"
+      - "traefik.http.services.finance-frontend.loadbalancer.server.port=3000"
+    networks:
+      - finance_tracker_network
+      - homelab  # Your existing Traefik network
+
+  backend:
+    # ... existing configuration  
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.finance-api.rule=Host(`finance-api.yourdomain.com`)"
+      - "traefik.http.routers.finance-api.tls=true" 
+      - "traefik.http.routers.finance-api.tls.certresolver=letsencrypt"
+      - "traefik.http.services.finance-api.loadbalancer.server.port=8000"
+    networks:
+      - finance_tracker_network
+      - homelab  # Your existing Traefik network
+
+networks:
+  finance_tracker_network:
+    driver: bridge
+  homelab:
+    external: true  # Reference your existing network
+```
+
+### Using with Nginx Proxy Manager
+
+Add these as proxy hosts in your Nginx Proxy Manager:
+- **Frontend**: `finance.yourdomain.com` → `http://finance_tracker_frontend:3000`
+- **Backend**: `finance-api.yourdomain.com` → `http://finance_tracker_backend:8000`
+
+### Direct Access (No Reverse Proxy)
+
+If you prefer direct access without a reverse proxy:
+- **Frontend**: `http://your-server-ip:3310`
+- **Backend API**: `http://your-server-ip:8810/api`
+
+**Note**: The `nginx/` directory contains example configurations that you can reference if you want to set up your own Nginx reverse proxy, but it's not used by the default Docker setup.
 
 #### 3. Production Deployment
 ```bash
@@ -100,8 +152,8 @@ nano .env  # Edit with your production values
 ./manage.sh prod
 
 # Application will be available at:
-# - Frontend: http://localhost:8180 (via Nginx)
-# - API: http://localhost:8180/api (via Nginx)
+# - Frontend: http://localhost:3310
+# - API: http://localhost:8810/api
 ```
 
 ### Management Script Commands
@@ -203,8 +255,7 @@ finance_tracker/
 │   ├── docker-compose.yml          # Development environment
 │   ├── docker-compose.prod.yml     # Production environment
 │   ├── manage.sh                   # Management script
-│   ├── .env.example               # Environment template
-│   └── nginx/                     # Nginx configuration
+│   └── .env.example               # Environment template
 │
 ├── Backend (Django REST API)
 │   ├── finance_tracker/           # Django project settings

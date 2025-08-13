@@ -31,23 +31,6 @@ services:
       - finance_tracker_network
     restart: unless-stopped
 
-  nginx:
-    image: nginx:alpine
-    container_name: finance_tracker_nginx
-    ports:
-      - "8180:80"
-      - "8543:443"
-    volumes:
-      - ./nginx/nginx.conf:/etc/nginx/nginx.conf
-      - ./nginx/ssl:/etc/nginx/ssl
-      - backend_static:/var/www/static
-    depends_on:
-      - backend
-      - frontend
-    networks:
-      - finance_tracker_network
-    restart: unless-stopped
-
 volumes:
   backend_static:
 
