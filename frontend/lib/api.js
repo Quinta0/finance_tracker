@@ -1,24 +1,7 @@
 // API Configuration
-// Try to detect the correct API URL at runtime
-const getApiBaseUrl = () => {
-  // If we have a build-time environment variable, use it
-  if (process.env.NEXT_PUBLIC_API_URL) {
-    return process.env.NEXT_PUBLIC_API_URL;
-  }
-  
-  // For client-side, detect from current location
-  if (typeof window !== 'undefined') {
-    const protocol = window.location.protocol;
-    const hostname = window.location.hostname;
-    // Use the same host but port 8810 for API
-    return `${protocol}//${hostname}:8810/api`;
-  }
-  
-  // Fallback for server-side
-  return 'http://localhost:8810/api';
-};
+import { getApiUrl } from './apiConfig';
 
-const API_BASE_URL = getApiBaseUrl();
+const API_BASE_URL = getApiUrl();
 
 // API Service Class
 class ApiService {
@@ -184,6 +167,14 @@ class ApiService {
     return this.get(`/budget/budget_analysis/${params}`);
   }
 
+  // Get comprehensive report data
+  async getReportData(monthsBack = 3, periodId = null) {
+    const params = new URLSearchParams();
+    if (monthsBack) params.append('months_back', monthsBack);
+    if (periodId) params.append('period_id', periodId);
+    return this.get(`/budget/report_data/?${params.toString()}`);
+  }
+
   // ==================== BUDGET PERIODS ====================
 
   // Get all budget periods
@@ -299,6 +290,7 @@ export const {
   getCurrentBudget,
   updateMonthlyIncome,
   getBudgetAnalysis,
+  getReportData,
   
   // Budget Periods
   getBudgetPeriods,
