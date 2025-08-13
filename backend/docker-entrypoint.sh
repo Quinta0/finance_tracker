@@ -3,11 +3,21 @@
 # Wait for database to be ready (not needed for SQLite but good practice)
 echo "Starting Django backend..."
 
+# Show current migration status
+echo "Current migration status:"
+python manage.py showmigrations
+
 # Create migrations if they don't exist
-python manage.py makemigrations
+echo "Creating migrations..."
+python manage.py makemigrations finance
 
 # Run migrations
+echo "Running migrations..."
 python manage.py migrate
+
+# Show migration status after running migrations
+echo "Migration status after running migrations:"
+python manage.py showmigrations
 
 # Create default categories if they don't exist
 python manage.py shell << EOF
